@@ -1,6 +1,6 @@
 name: Auto-approve workflows
 
-"on":
+on:
   workflow_run:
     workflows: ["*"]
     types: [requested]
