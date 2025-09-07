@@ -51,6 +51,24 @@ void Motion_control_save();
 bool Motion_control_read();
 
 /**
+ * Runtime configurable sensitivity parameters
+ * These replace compile-time constants for user-adjustable tuning
+ */
+struct AdaptivePressureTuning
+{
+    float proportional_gain;       ///< Proportional gain for pressure response (default: 2.0f)
+    float high_multiplier;         ///< Multiplier for high pressure threshold (default: 1.3f)
+    float low_multiplier;          ///< Multiplier for low pressure threshold (default: 0.7f)
+    float response_smoothing;      ///< Response smoothing factor (default: 0.8f)
+    float deadband_voltage;        ///< Minimum deadband around neutral point (default: 0.1f)
+    float noise_threshold;         ///< Maximum acceptable sensor noise (default: 0.1f)
+    uint32_t calibration_samples;  ///< Number of samples for calibration (default: 50)
+    bool early_response_enabled;   ///< Enable early pressure response (default: true)
+    bool range_learning_enabled;   ///< Enable continuous range learning (default: true)
+    float range_update_rate;       ///< Rate of range updates (default: 0.1f)
+} pressure_tuning;
+
+/**
  * Adaptive pressure sensor calibration data for each channel
  */
 struct AdaptivePressureCalibration
@@ -70,10 +88,30 @@ struct AdaptivePressureCalibration
 } adaptive_pressure[MAX_FILAMENT_CHANNELS];
 
 /**
+ * Initialize runtime tuning parameters with defaults from config.h
+ */
+void init_pressure_tuning_defaults()
+{
+    pressure_tuning.proportional_gain = PRESSURE_PROPORTIONAL_GAIN;
+    pressure_tuning.high_multiplier = PRESSURE_HIGH_MULTIPLIER;
+    pressure_tuning.low_multiplier = PRESSURE_LOW_MULTIPLIER;
+    pressure_tuning.response_smoothing = PRESSURE_RESPONSE_SMOOTHING;
+    pressure_tuning.deadband_voltage = PRESSURE_DEADBAND_VOLTAGE;
+    pressure_tuning.noise_threshold = PRESSURE_NOISE_THRESHOLD;
+    pressure_tuning.calibration_samples = PRESSURE_CALIBRATION_SAMPLES;
+    pressure_tuning.early_response_enabled = PRESSURE_EARLY_RESPONSE_ENABLED;
+    pressure_tuning.range_learning_enabled = PRESSURE_RANGE_LEARNING_ENABLED;
+    pressure_tuning.range_update_rate = PRESSURE_RANGE_UPDATE_RATE;
+}
+
+/**
  * Initialize adaptive pressure control system
  */
 void adaptive_pressure_init()
 {
+    // Initialize tuning parameters with defaults
+    init_pressure_tuning_defaults();
+    
     for (int i = 0; i < MAX_FILAMENT_CHANNELS; i++) {
         adaptive_pressure[i].zero_point = 1.65f;      // Default neutral point
         adaptive_pressure[i].min_pressure = 1.0f;     // Conservative initial range
@@ -106,7 +144,7 @@ void calibrate_pressure_sensor(int channel)
     
     AdaptivePressureCalibration& cal = adaptive_pressure[channel];
     
-    if (cal.calibrated && cal.sample_count > PRESSURE_CALIBRATION_SAMPLES) {
+    if (cal.calibrated && cal.sample_count > pressure_tuning.calibration_samples) {
         return; // Already calibrated
     }
     
@@ -145,7 +183,7 @@ void calibrate_pressure_sensor(int channel)
     }
     
     // Complete calibration when enough samples collected
-    if (cal.sample_count >= PRESSURE_CALIBRATION_SAMPLES) {
+    if (cal.sample_count >= pressure_tuning.calibration_samples) {
         cal.zero_point = sample_sum[channel] / cal.sample_count;
         cal.neutral_target = cal.zero_point;
         
@@ -154,16 +192,16 @@ void calibrate_pressure_sensor(int channel)
             cal.noise_level = sqrt(sample_variance[channel] / (cal.sample_count - 1));
         }
         
-        // Set initial thresholds based on zero point
+        // Set initial thresholds based on zero point using runtime parameters
         float base_range = max(0.2f, cal.noise_level * 4.0f);
-        cal.high_threshold = cal.zero_point + base_range * PRESSURE_HIGH_MULTIPLIER;
-        cal.low_threshold = cal.zero_point - base_range * PRESSURE_LOW_MULTIPLIER;
+        cal.high_threshold = cal.zero_point + base_range * pressure_tuning.high_multiplier;
+        cal.low_threshold = cal.zero_point - base_range * pressure_tuning.low_multiplier;
         
-        // Ensure minimum deadband
-        if (cal.high_threshold - cal.low_threshold < PRESSURE_DEADBAND_VOLTAGE) {
+        // Ensure minimum deadband using runtime parameter
+        if (cal.high_threshold - cal.low_threshold < pressure_tuning.deadband_voltage) {
             float mid_point = (cal.high_threshold + cal.low_threshold) / 2.0f;
-            cal.high_threshold = mid_point + PRESSURE_DEADBAND_VOLTAGE / 2.0f;
-            cal.low_threshold = mid_point - PRESSURE_DEADBAND_VOLTAGE / 2.0f;
+            cal.high_threshold = mid_point + pressure_tuning.deadband_voltage / 2.0f;
+            cal.low_threshold = mid_point - pressure_tuning.deadband_voltage / 2.0f;
         }
         
         // Safety bounds - keep thresholds within reasonable ADC range
@@ -199,7 +237,7 @@ void calibrate_pressure_sensor(int channel)
  */
 void update_pressure_range_learning(int channel, float pressure_reading)
 {
-    if (!ADAPTIVE_PRESSURE_CONTROL_ENABLED || !PRESSURE_RANGE_LEARNING_ENABLED ||
+    if (!ADAPTIVE_PRESSURE_CONTROL_ENABLED || !pressure_tuning.range_learning_enabled ||
         channel < 0 || channel >= MAX_FILAMENT_CHANNELS) {
         return;
     }
@@ -214,14 +252,14 @@ void update_pressure_range_learning(int channel, float pressure_reading)
     bool range_updated = false;
     
     if (pressure_reading < cal.min_pressure) {
-        cal.min_pressure = cal.min_pressure * (1.0f - PRESSURE_RANGE_UPDATE_RATE) + 
-                          pressure_reading * PRESSURE_RANGE_UPDATE_RATE;
+        cal.min_pressure = cal.min_pressure * (1.0f - pressure_tuning.range_update_rate) + 
+                          pressure_reading * pressure_tuning.range_update_rate;
         range_updated = true;
     }
     
     if (pressure_reading > cal.max_pressure) {
-        cal.max_pressure = cal.max_pressure * (1.0f - PRESSURE_RANGE_UPDATE_RATE) + 
-                          pressure_reading * PRESSURE_RANGE_UPDATE_RATE;
+        cal.max_pressure = cal.max_pressure * (1.0f - pressure_tuning.range_update_rate) + 
+                          pressure_reading * pressure_tuning.range_update_rate;
         range_updated = true;
     }
     
@@ -234,10 +272,10 @@ void update_pressure_range_learning(int channel, float pressure_reading)
             cal.range_voltage = PRESSURE_MIN_RANGE_VOLTAGE;
         }
         
-        // Update adaptive thresholds based on learned range
+        // Update adaptive thresholds based on learned range using runtime parameters
         float range_margin = cal.range_voltage * 0.3f; // 30% of range for margins
-        cal.high_threshold = cal.zero_point + range_margin * PRESSURE_HIGH_MULTIPLIER;
-        cal.low_threshold = cal.zero_point - range_margin * PRESSURE_LOW_MULTIPLIER;
+        cal.high_threshold = cal.zero_point + range_margin * pressure_tuning.high_multiplier;
+        cal.low_threshold = cal.zero_point - range_margin * pressure_tuning.low_multiplier;
         
         // Clamp to observed limits with safety margin
         cal.high_threshold = min(cal.high_threshold, cal.max_pressure - 0.05f);
@@ -273,9 +311,9 @@ int calculate_adaptive_pressure_status(int channel)
     // Update range learning
     update_pressure_range_learning(channel, current_pressure);
     
-    // Apply response smoothing
-    cal.response_smoothing = cal.response_smoothing * PRESSURE_RESPONSE_SMOOTHING + 
-                            current_pressure * (1.0f - PRESSURE_RESPONSE_SMOOTHING);
+    // Apply response smoothing using runtime parameter
+    cal.response_smoothing = cal.response_smoothing * pressure_tuning.response_smoothing + 
+                            current_pressure * (1.0f - pressure_tuning.response_smoothing);
     
     float smoothed_pressure = cal.response_smoothing;
     
@@ -315,7 +353,7 @@ float get_adaptive_pressure_target(int channel)
  */
 float get_early_pressure_response(int channel)
 {
-    if (!ADAPTIVE_PRESSURE_CONTROL_ENABLED || !PRESSURE_EARLY_RESPONSE_ENABLED ||
+    if (!ADAPTIVE_PRESSURE_CONTROL_ENABLED || !pressure_tuning.early_response_enabled ||
         channel < 0 || channel >= MAX_FILAMENT_CHANNELS) {
         return 0.0f; // No early response
     }
@@ -329,15 +367,15 @@ float get_early_pressure_response(int channel)
     float current_pressure = MC_PULL_stu_raw[channel];
     float pressure_error = current_pressure - cal.neutral_target;
     
-    // Proportional response within deadband for early correction
-    float deadband_half = PRESSURE_DEADBAND_VOLTAGE / 2.0f;
+    // Proportional response within deadband for early correction using runtime parameters
+    float deadband_half = pressure_tuning.deadband_voltage / 2.0f;
     
     if (fabs(pressure_error) < deadband_half) {
         // Within deadband - apply gentle proportional correction
-        return pressure_error * PRESSURE_PROPORTIONAL_GAIN * 0.5f;
+        return pressure_error * pressure_tuning.proportional_gain * 0.5f;
     } else {
         // Outside deadband - stronger response
-        return pressure_error * PRESSURE_PROPORTIONAL_GAIN;
+        return pressure_error * pressure_tuning.proportional_gain;
     }
 }
 
@@ -446,6 +484,171 @@ void force_pressure_recalibration(int channel)
     
     DEBUG_MY("Forced recalibration for channel ");
     DEBUG_float(channel, 0);
+    DEBUG_MY("\n");
+}
+
+// =============================================================================
+// Runtime Pressure Sensitivity Tuning Functions
+// =============================================================================
+
+/**
+ * Set pressure sensitivity parameters for more responsive or stable operation
+ * @param proportional_gain Proportional gain for pressure response (1.0-5.0, default: 2.0)
+ * @param high_multiplier Multiplier for high pressure threshold (1.0-2.0, default: 1.3)
+ * @param low_multiplier Multiplier for low pressure threshold (0.3-1.0, default: 0.7)
+ * @param response_smoothing Response smoothing factor (0.5-0.95, default: 0.8)
+ */
+void set_pressure_sensitivity(float proportional_gain, float high_multiplier, 
+                             float low_multiplier, float response_smoothing)
+{
+    if (!ADAPTIVE_PRESSURE_CONTROL_ENABLED) {
+        return;
+    }
+    
+    // Validate and clamp parameters to safe ranges
+    pressure_tuning.proportional_gain = max(1.0f, min(5.0f, proportional_gain));
+    pressure_tuning.high_multiplier = max(1.0f, min(2.0f, high_multiplier));
+    pressure_tuning.low_multiplier = max(0.3f, min(1.0f, low_multiplier));
+    pressure_tuning.response_smoothing = max(0.5f, min(0.95f, response_smoothing));
+    
+    // Save to flash memory
+    Motion_control_save();
+    
+    DEBUG_MY("Pressure sensitivity updated: gain=");
+    DEBUG_float(pressure_tuning.proportional_gain, 2);
+    DEBUG_MY(" high=");
+    DEBUG_float(pressure_tuning.high_multiplier, 2);
+    DEBUG_MY(" low=");
+    DEBUG_float(pressure_tuning.low_multiplier, 2);
+    DEBUG_MY(" smooth=");
+    DEBUG_float(pressure_tuning.response_smoothing, 2);
+    DEBUG_MY("\n");
+}
+
+/**
+ * Apply a predefined sensitivity preset
+ * @param preset 0=Conservative (slow, stable), 1=Normal (default), 2=Aggressive (fast, sensitive)
+ */
+void set_pressure_sensitivity_preset(int preset)
+{
+    if (!ADAPTIVE_PRESSURE_CONTROL_ENABLED) {
+        return;
+    }
+    
+    switch (preset) {
+        case 0: // Conservative/Stable - slower but very reliable
+            pressure_tuning.proportional_gain = 1.5f;
+            pressure_tuning.high_multiplier = 1.2f;
+            pressure_tuning.low_multiplier = 0.8f;
+            pressure_tuning.response_smoothing = 0.9f;
+            pressure_tuning.deadband_voltage = 0.12f;
+            DEBUG_MY("Applied Conservative sensitivity preset\n");
+            break;
+            
+        case 1: // Normal - balanced performance (default)
+            init_pressure_tuning_defaults();
+            DEBUG_MY("Applied Normal sensitivity preset (defaults)\n");
+            break;
+            
+        case 2: // Aggressive/Fast - faster response but may be sensitive
+            pressure_tuning.proportional_gain = 3.0f;
+            pressure_tuning.high_multiplier = 1.4f;
+            pressure_tuning.low_multiplier = 0.6f;
+            pressure_tuning.response_smoothing = 0.7f;
+            pressure_tuning.deadband_voltage = 0.08f;
+            DEBUG_MY("Applied Aggressive sensitivity preset\n");
+            break;
+            
+        default:
+            DEBUG_MY("Invalid preset, using Normal (1)\n");
+            init_pressure_tuning_defaults();
+            break;
+    }
+    
+    // Save to flash memory
+    Motion_control_save();
+}
+
+/**
+ * Get current pressure sensitivity parameters for diagnostics
+ */
+void get_pressure_sensitivity(float* proportional_gain, float* high_multiplier, 
+                             float* low_multiplier, float* response_smoothing)
+{
+    if (!ADAPTIVE_PRESSURE_CONTROL_ENABLED) {
+        return;
+    }
+    
+    if (proportional_gain) *proportional_gain = pressure_tuning.proportional_gain;
+    if (high_multiplier) *high_multiplier = pressure_tuning.high_multiplier;
+    if (low_multiplier) *low_multiplier = pressure_tuning.low_multiplier;
+    if (response_smoothing) *response_smoothing = pressure_tuning.response_smoothing;
+}
+
+/**
+ * Reset all pressure tuning parameters to defaults and clear saved settings
+ */
+void reset_pressure_sensitivity()
+{
+    if (!ADAPTIVE_PRESSURE_CONTROL_ENABLED) {
+        return;
+    }
+    
+    init_pressure_tuning_defaults();
+    
+    // Save current tuning to immediately clear any saved settings
+    Motion_control_save();
+    
+    DEBUG_MY("Pressure sensitivity reset to defaults\n");
+}
+
+/**
+ * Increase pressure sensitivity for faster response (user-friendly interface)
+ * Call multiple times for more sensitivity
+ */
+void increase_pressure_sensitivity()
+{
+    if (!ADAPTIVE_PRESSURE_CONTROL_ENABLED) {
+        return;
+    }
+    
+    // Increase gain and reduce smoothing for faster response
+    pressure_tuning.proportional_gain = min(5.0f, pressure_tuning.proportional_gain * 1.2f);
+    pressure_tuning.response_smoothing = max(0.5f, pressure_tuning.response_smoothing * 0.95f);
+    
+    // Tighten thresholds slightly for earlier response
+    pressure_tuning.high_multiplier = min(2.0f, pressure_tuning.high_multiplier * 1.05f);
+    pressure_tuning.low_multiplier = max(0.3f, pressure_tuning.low_multiplier * 0.95f);
+    
+    Motion_control_save();
+    
+    DEBUG_MY("Pressure sensitivity increased: gain=");
+    DEBUG_float(pressure_tuning.proportional_gain, 2);
+    DEBUG_MY("\n");
+}
+
+/**
+ * Decrease pressure sensitivity for more stable operation (user-friendly interface)
+ * Call multiple times for less sensitivity
+ */
+void decrease_pressure_sensitivity()
+{
+    if (!ADAPTIVE_PRESSURE_CONTROL_ENABLED) {
+        return;
+    }
+    
+    // Decrease gain and increase smoothing for more stable operation
+    pressure_tuning.proportional_gain = max(1.0f, pressure_tuning.proportional_gain * 0.85f);
+    pressure_tuning.response_smoothing = min(0.95f, pressure_tuning.response_smoothing * 1.05f);
+    
+    // Relax thresholds slightly to reduce sensitivity
+    pressure_tuning.high_multiplier = max(1.0f, pressure_tuning.high_multiplier * 0.95f);
+    pressure_tuning.low_multiplier = min(1.0f, pressure_tuning.low_multiplier * 1.05f);
+    
+    Motion_control_save();
+    
+    DEBUG_MY("Pressure sensitivity decreased: gain=");
+    DEBUG_float(pressure_tuning.proportional_gain, 2);
     DEBUG_MY("\n");
 }
 
@@ -589,6 +792,22 @@ struct alignas(4) Motion_control_save_struct
         uint32_t reserved[2];      ///< Reserved for future use
     } pressure_cal[4];
     
+    // Runtime tuning parameters (new)
+    struct {
+        float proportional_gain;       ///< Proportional gain for pressure response
+        float high_multiplier;         ///< Multiplier for high pressure threshold
+        float low_multiplier;          ///< Multiplier for low pressure threshold
+        float response_smoothing;      ///< Response smoothing factor
+        float deadband_voltage;        ///< Minimum deadband around neutral point
+        float noise_threshold;         ///< Maximum acceptable sensor noise
+        uint32_t calibration_samples;  ///< Number of samples for calibration
+        bool early_response_enabled;   ///< Enable early pressure response
+        bool range_learning_enabled;   ///< Enable continuous range learning
+        float range_update_rate;       ///< Rate of range updates
+        bool tuning_saved;             ///< Whether custom tuning has been saved
+        uint32_t tuning_reserved[3];   ///< Reserved for future tuning parameters
+    } pressure_tuning_save;
+    
     int check = 0x40614061;
 } Motion_control_data_save;
 
@@ -645,6 +864,26 @@ bool Motion_control_read()
                     adaptive_pressure[i].calibrated = Motion_control_data_save.pressure_cal[i].calibrated;
                 }
             }
+            
+            // Load tuning parameters if they were saved
+            if (Motion_control_data_save.pressure_tuning_save.tuning_saved) {
+                pressure_tuning.proportional_gain = Motion_control_data_save.pressure_tuning_save.proportional_gain;
+                pressure_tuning.high_multiplier = Motion_control_data_save.pressure_tuning_save.high_multiplier;
+                pressure_tuning.low_multiplier = Motion_control_data_save.pressure_tuning_save.low_multiplier;
+                pressure_tuning.response_smoothing = Motion_control_data_save.pressure_tuning_save.response_smoothing;
+                pressure_tuning.deadband_voltage = Motion_control_data_save.pressure_tuning_save.deadband_voltage;
+                pressure_tuning.noise_threshold = Motion_control_data_save.pressure_tuning_save.noise_threshold;
+                pressure_tuning.calibration_samples = Motion_control_data_save.pressure_tuning_save.calibration_samples;
+                pressure_tuning.early_response_enabled = Motion_control_data_save.pressure_tuning_save.early_response_enabled;
+                pressure_tuning.range_learning_enabled = Motion_control_data_save.pressure_tuning_save.range_learning_enabled;
+                pressure_tuning.range_update_rate = Motion_control_data_save.pressure_tuning_save.range_update_rate;
+                
+                DEBUG_MY("Loaded custom pressure tuning parameters\n");
+            } else {
+                // Use defaults from config.h
+                init_pressure_tuning_defaults();
+                DEBUG_MY("Using default pressure tuning parameters\n");
+            }
         }
         
         return true;
@@ -663,6 +902,19 @@ void Motion_control_save()
             Motion_control_data_save.pressure_cal[i].noise_level = adaptive_pressure[i].noise_level;
             Motion_control_data_save.pressure_cal[i].calibrated = adaptive_pressure[i].calibrated;
         }
+        
+        // Save tuning parameters
+        Motion_control_data_save.pressure_tuning_save.proportional_gain = pressure_tuning.proportional_gain;
+        Motion_control_data_save.pressure_tuning_save.high_multiplier = pressure_tuning.high_multiplier;
+        Motion_control_data_save.pressure_tuning_save.low_multiplier = pressure_tuning.low_multiplier;
+        Motion_control_data_save.pressure_tuning_save.response_smoothing = pressure_tuning.response_smoothing;
+        Motion_control_data_save.pressure_tuning_save.deadband_voltage = pressure_tuning.deadband_voltage;
+        Motion_control_data_save.pressure_tuning_save.noise_threshold = pressure_tuning.noise_threshold;
+        Motion_control_data_save.pressure_tuning_save.calibration_samples = pressure_tuning.calibration_samples;
+        Motion_control_data_save.pressure_tuning_save.early_response_enabled = pressure_tuning.early_response_enabled;
+        Motion_control_data_save.pressure_tuning_save.range_learning_enabled = pressure_tuning.range_learning_enabled;
+        Motion_control_data_save.pressure_tuning_save.range_update_rate = pressure_tuning.range_update_rate;
+        Motion_control_data_save.pressure_tuning_save.tuning_saved = true;
     }
     
     Flash_saves(&Motion_control_data_save, sizeof(Motion_control_save_struct), Motion_control_save_flash_addr);
@@ -2258,5 +2510,95 @@ void Motion_control_init() // 初始化所有运动和传感器
         //     filament_channel_inserted[i]=false;
         // }
         filament_now_position[i] = filament_idle;//将通道初始状态设置为空闲
+    }
+}
+
+// =============================================================================
+// Debug Helper Functions for Pressure Sensitivity Tuning
+// =============================================================================
+
+/**
+ * Print current pressure sensitivity settings
+ * Usage: Call this from debug interface to see current tuning
+ */
+void debug_print_pressure_sensitivity()
+{
+    if (!ADAPTIVE_PRESSURE_CONTROL_ENABLED) {
+        DEBUG_MY("Adaptive pressure control disabled\n");
+        return;
+    }
+    
+    DEBUG_MY("Current pressure sensitivity settings:\n");
+    DEBUG_MY("  Proportional gain: ");
+    DEBUG_float(pressure_tuning.proportional_gain, 2);
+    DEBUG_MY("\n  High multiplier: ");
+    DEBUG_float(pressure_tuning.high_multiplier, 2);
+    DEBUG_MY("\n  Low multiplier: ");
+    DEBUG_float(pressure_tuning.low_multiplier, 2);
+    DEBUG_MY("\n  Response smoothing: ");
+    DEBUG_float(pressure_tuning.response_smoothing, 2);
+    DEBUG_MY("\n  Deadband voltage: ");
+    DEBUG_float(pressure_tuning.deadband_voltage, 3);
+    DEBUG_MY("V\n");
+    DEBUG_MY("  Early response: ");
+    DEBUG_MY(pressure_tuning.early_response_enabled ? "ON" : "OFF");
+    DEBUG_MY("\n  Range learning: ");
+    DEBUG_MY(pressure_tuning.range_learning_enabled ? "ON" : "OFF");
+    DEBUG_MY("\n");
+}
+
+/**
+ * Print pressure sensor calibration status for all channels
+ */
+void debug_print_pressure_calibration()
+{
+    if (!ADAPTIVE_PRESSURE_CONTROL_ENABLED) {
+        DEBUG_MY("Adaptive pressure control disabled\n");
+        return;
+    }
+    
+    DEBUG_MY("Pressure sensor calibration status:\n");
+    for (int i = 0; i < MAX_FILAMENT_CHANNELS; i++) {
+        DEBUG_MY("  CH");
+        DEBUG_float(i, 0);
+        DEBUG_MY(": ");
+        if (adaptive_pressure[i].calibrated) {
+            DEBUG_MY("Calibrated - zero=");
+            DEBUG_float(adaptive_pressure[i].zero_point, 3);
+            DEBUG_MY("V high=");
+            DEBUG_float(adaptive_pressure[i].high_threshold, 3);
+            DEBUG_MY("V low=");
+            DEBUG_float(adaptive_pressure[i].low_threshold, 3);
+            DEBUG_MY("V\n");
+        } else {
+            DEBUG_MY("Not calibrated (using defaults)\n");
+        }
+    }
+}
+
+/**
+ * Print current pressure readings for all channels
+ */
+void debug_print_pressure_readings()
+{
+    if (!ADAPTIVE_PRESSURE_CONTROL_ENABLED) {
+        DEBUG_MY("Adaptive pressure control disabled\n");
+        return;
+    }
+    
+    DEBUG_MY("Current pressure readings:\n");
+    for (int i = 0; i < MAX_FILAMENT_CHANNELS; i++) {
+        DEBUG_MY("  CH");
+        DEBUG_float(i, 0);
+        DEBUG_MY(": ");
+        DEBUG_float(MC_PULL_stu_raw[i], 3);
+        DEBUG_MY("V (status=");
+        DEBUG_float(MC_PULL_stu[i], 0);
+        if (adaptive_pressure[i].calibrated) {
+            float early_response = get_early_pressure_response(i);
+            DEBUG_MY(" early=");
+            DEBUG_float(early_response, 3);
+        }
+        DEBUG_MY(")\n");
     }
 }

@@ -30,3 +30,18 @@ extern void reset_all_adaptive_pressure_calibration();
 extern bool get_adaptive_pressure_status(int channel, float* zero_point, float* high_threshold, 
                                         float* low_threshold, bool* calibrated);
 extern void force_pressure_recalibration(int channel);
+
+// Runtime pressure sensitivity tuning functions
+extern void set_pressure_sensitivity(float proportional_gain, float high_multiplier, 
+                                    float low_multiplier, float response_smoothing);
+extern void set_pressure_sensitivity_preset(int preset);
+extern void get_pressure_sensitivity(float* proportional_gain, float* high_multiplier, 
+                                    float* low_multiplier, float* response_smoothing);
+extern void reset_pressure_sensitivity();
+extern void increase_pressure_sensitivity();
+extern void decrease_pressure_sensitivity();
+
+// Debug helper functions for pressure tuning
+extern void debug_print_pressure_sensitivity();
+extern void debug_print_pressure_calibration();
+extern void debug_print_pressure_readings();

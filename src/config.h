@@ -80,7 +80,25 @@
  * IMPORTANT: To disable adaptive control and use legacy static thresholds,
  * set ADAPTIVE_PRESSURE_CONTROL_ENABLED to false.
  * 
- * TUNING EXAMPLES:
+ * RUNTIME TUNING:
+ * The system now supports runtime adjustment of sensitivity parameters without
+ * recompiling firmware. Use these functions in your debug interface:
+ * 
+ * - increase_pressure_sensitivity() - Make more responsive (call multiple times)
+ * - decrease_pressure_sensitivity() - Make more stable (call multiple times)  
+ * - set_pressure_sensitivity_preset(0) - Conservative preset (slow, stable)
+ * - set_pressure_sensitivity_preset(1) - Normal preset (balanced, default)
+ * - set_pressure_sensitivity_preset(2) - Aggressive preset (fast, sensitive)
+ * - reset_pressure_sensitivity() - Reset to defaults
+ * 
+ * DEBUG INTERFACE:
+ * - debug_print_pressure_sensitivity() - Show current settings
+ * - debug_print_pressure_calibration() - Show calibration status
+ * - debug_print_pressure_readings() - Show live pressure values
+ * 
+ * Settings are automatically saved to flash memory and persist across reboots.
+ * 
+ * TUNING EXAMPLES (if you want to modify defaults in config.h):
  * 
  * For Conservative/Stable Operation (slower but very reliable):
  * #define PRESSURE_HIGH_MULTIPLIER            1.2f
@@ -101,24 +119,24 @@
  */
 #define ADAPTIVE_PRESSURE_CONTROL_ENABLED   true    ///< Enable adaptive pressure control system
 
-// Calibration parameters
-#define PRESSURE_CALIBRATION_SAMPLES        50      ///< Number of samples for sensor calibration (20-100 recommended)
+// Default calibration parameters (can be changed at runtime)
+#define PRESSURE_CALIBRATION_SAMPLES        50      ///< Default number of samples for sensor calibration (runtime configurable)
 #define PRESSURE_CALIBRATION_TIMEOUT_MS     3000    ///< Maximum time for calibration in ms
-#define PRESSURE_NOISE_THRESHOLD            0.1f    ///< Maximum acceptable sensor noise in V (0.05-0.2 recommended)
+#define PRESSURE_NOISE_THRESHOLD            0.1f    ///< Default maximum acceptable sensor noise in V (runtime configurable)
 
-// Adaptive threshold calculation
-#define PRESSURE_HIGH_MULTIPLIER            1.3f    ///< Multiplier for high pressure threshold (1.2-1.5 recommended)
-#define PRESSURE_LOW_MULTIPLIER             0.7f    ///< Multiplier for low pressure threshold (0.5-0.8 recommended)
-#define PRESSURE_DEADBAND_VOLTAGE           0.1f    ///< Minimum deadband around neutral point in V
+// Default adaptive threshold calculation (can be changed at runtime)
+#define PRESSURE_HIGH_MULTIPLIER            1.3f    ///< Default multiplier for high pressure threshold (runtime configurable)
+#define PRESSURE_LOW_MULTIPLIER             0.7f    ///< Default multiplier for low pressure threshold (runtime configurable)
+#define PRESSURE_DEADBAND_VOLTAGE           0.1f    ///< Default minimum deadband around neutral point in V (runtime configurable)
 
-// Responsive control parameters
-#define PRESSURE_EARLY_RESPONSE_ENABLED     true    ///< Enable early pressure response before thresholds
-#define PRESSURE_PROPORTIONAL_GAIN          2.0f    ///< Proportional gain for pressure response (1.0-5.0 recommended)
-#define PRESSURE_RESPONSE_SMOOTHING         0.8f    ///< Response smoothing factor (0.7-0.9 recommended)
+// Default responsive control parameters (can be changed at runtime)
+#define PRESSURE_EARLY_RESPONSE_ENABLED     true    ///< Default enable early pressure response (runtime configurable)
+#define PRESSURE_PROPORTIONAL_GAIN          2.0f    ///< Default proportional gain for pressure response (runtime configurable)
+#define PRESSURE_RESPONSE_SMOOTHING         0.8f    ///< Default response smoothing factor (runtime configurable)
 
-// Range detection during operation
-#define PRESSURE_RANGE_LEARNING_ENABLED     true    ///< Enable continuous range learning during operation
-#define PRESSURE_RANGE_UPDATE_RATE          0.1f    ///< Rate of range updates (0.05-0.2 recommended)
+// Default range detection during operation (can be changed at runtime)
+#define PRESSURE_RANGE_LEARNING_ENABLED     true    ///< Default enable continuous range learning (runtime configurable)
+#define PRESSURE_RANGE_UPDATE_RATE          0.1f    ///< Default rate of range updates (runtime configurable)
 #define PRESSURE_MIN_RANGE_VOLTAGE          0.3f    ///< Minimum expected pressure range in V
 
 // Debug and diagnostics
