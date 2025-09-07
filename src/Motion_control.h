@@ -27,3 +27,6 @@ extern float get_adaptive_pressure_target(int channel);
 extern float get_early_pressure_response(int channel);
 extern void reset_adaptive_pressure_calibration(int channel);
 extern void reset_all_adaptive_pressure_calibration();
+extern bool get_adaptive_pressure_status(int channel, float* zero_point, float* high_threshold, 
+                                        float* low_threshold, bool* calibrated);
+extern void force_pressure_recalibration(int channel);

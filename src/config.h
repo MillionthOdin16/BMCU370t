@@ -76,6 +76,28 @@
  * This system learns individual sensor characteristics to provide more responsive
  * and robust filament feeding. It addresses sensor variations that cause feed failures
  * with static thresholds.
+ * 
+ * IMPORTANT: To disable adaptive control and use legacy static thresholds,
+ * set ADAPTIVE_PRESSURE_CONTROL_ENABLED to false.
+ * 
+ * TUNING EXAMPLES:
+ * 
+ * For Conservative/Stable Operation (slower but very reliable):
+ * #define PRESSURE_HIGH_MULTIPLIER            1.2f
+ * #define PRESSURE_LOW_MULTIPLIER             0.8f  
+ * #define PRESSURE_PROPORTIONAL_GAIN          1.5f
+ * #define PRESSURE_RESPONSE_SMOOTHING         0.9f
+ * 
+ * For Aggressive/Fast Response (faster but may be sensitive):
+ * #define PRESSURE_HIGH_MULTIPLIER            1.4f
+ * #define PRESSURE_LOW_MULTIPLIER             0.6f
+ * #define PRESSURE_PROPORTIONAL_GAIN          3.0f
+ * #define PRESSURE_RESPONSE_SMOOTHING         0.7f
+ * 
+ * For High-Noise Environment:
+ * #define PRESSURE_NOISE_THRESHOLD            0.15f
+ * #define PRESSURE_CALIBRATION_SAMPLES        100
+ * #define PRESSURE_RESPONSE_SMOOTHING         0.85f
  */
 #define ADAPTIVE_PRESSURE_CONTROL_ENABLED   true    ///< Enable adaptive pressure control system
 
@@ -98,6 +120,9 @@
 #define PRESSURE_RANGE_LEARNING_ENABLED     true    ///< Enable continuous range learning during operation
 #define PRESSURE_RANGE_UPDATE_RATE          0.1f    ///< Rate of range updates (0.05-0.2 recommended)
 #define PRESSURE_MIN_RANGE_VOLTAGE          0.3f    ///< Minimum expected pressure range in V
+
+// Debug and diagnostics
+#define ADAPTIVE_PRESSURE_DEBUG_ENABLED     false   ///< Enable detailed debug output for pressure system
 
 // Timing constants (in milliseconds)
 #define ASSIST_SEND_TIME_MS     1200        ///< Filament send assist duration

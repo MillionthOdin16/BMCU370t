@@ -166,8 +166,13 @@ void calibrate_pressure_sensor(int channel)
             cal.low_threshold = mid_point - PRESSURE_DEADBAND_VOLTAGE / 2.0f;
         }
         
+        // Safety bounds - keep thresholds within reasonable ADC range
+        cal.high_threshold = min(cal.high_threshold, 2.5f);  // Max ADC voltage with safety margin
+        cal.low_threshold = max(cal.low_threshold, 0.8f);    // Min practical voltage
+        
         cal.calibrated = true;
         
+        #if ADAPTIVE_PRESSURE_DEBUG_ENABLED
         DEBUG_MY("Pressure sensor calibrated CH");
         DEBUG_float(channel, 0);
         DEBUG_MY(": zero=");
@@ -179,6 +184,13 @@ void calibrate_pressure_sensor(int channel)
         DEBUG_MY("V low=");
         DEBUG_float(cal.low_threshold, 3);
         DEBUG_MY("V\n");
+        #else
+        DEBUG_MY("Pressure sensor calibrated: CH");
+        DEBUG_float(channel, 0);
+        DEBUG_MY(" zero=");
+        DEBUG_float(cal.zero_point, 3);
+        DEBUG_MY("V\n");
+        #endif
     }
 }
 
@@ -230,6 +242,10 @@ void update_pressure_range_learning(int channel, float pressure_reading)
         // Clamp to observed limits with safety margin
         cal.high_threshold = min(cal.high_threshold, cal.max_pressure - 0.05f);
         cal.low_threshold = max(cal.low_threshold, cal.min_pressure + 0.05f);
+        
+        // Safety bounds - keep thresholds within reasonable ADC range
+        cal.high_threshold = min(cal.high_threshold, 2.5f);  // Max ADC voltage with safety margin
+        cal.low_threshold = max(cal.low_threshold, 0.8f);    // Min practical voltage
         
         cal.range_learned = true;
     }
@@ -390,6 +406,47 @@ void reset_all_adaptive_pressure_calibration()
     Motion_control_save();
     
     DEBUG_MY("All adaptive pressure calibrations reset\n");
+}
+
+/**
+ * Get adaptive pressure calibration status for diagnostics
+ */
+bool get_adaptive_pressure_status(int channel, float* zero_point, float* high_threshold, 
+                                 float* low_threshold, bool* calibrated)
+{
+    if (!ADAPTIVE_PRESSURE_CONTROL_ENABLED || channel < 0 || channel >= MAX_FILAMENT_CHANNELS) {
+        return false;
+    }
+    
+    const AdaptivePressureCalibration& cal = adaptive_pressure[channel];
+    
+    if (zero_point) *zero_point = cal.zero_point;
+    if (high_threshold) *high_threshold = cal.high_threshold;
+    if (low_threshold) *low_threshold = cal.low_threshold;
+    if (calibrated) *calibrated = cal.calibrated;
+    
+    return true;
+}
+
+/**
+ * Force recalibration of a pressure sensor
+ */
+void force_pressure_recalibration(int channel)
+{
+    if (!ADAPTIVE_PRESSURE_CONTROL_ENABLED || channel < 0 || channel >= MAX_FILAMENT_CHANNELS) {
+        return;
+    }
+    
+    AdaptivePressureCalibration& cal = adaptive_pressure[channel];
+    
+    // Reset calibration state to force new calibration
+    cal.calibrated = false;
+    cal.sample_count = 0;
+    cal.range_learned = false;
+    
+    DEBUG_MY("Forced recalibration for channel ");
+    DEBUG_float(channel, 0);
+    DEBUG_MY("\n");
 }
 
 // Motion assist variables
@@ -2147,6 +2204,24 @@ void Motion_control_init() // 初始化所有运动和传感器
     if (ADAPTIVE_PRESSURE_CONTROL_ENABLED) {
         adaptive_pressure_init();
         DEBUG_MY("Adaptive pressure control enabled\n");
+        
+        // Load saved calibration data if available
+        Motion_control_read();
+        
+        // Initialize calibration for channels that aren't calibrated yet
+        for (int i = 0; i < MAX_FILAMENT_CHANNELS; i++) {
+            if (!adaptive_pressure[i].calibrated) {
+                DEBUG_MY("Will calibrate pressure sensor CH");
+                DEBUG_float(i, 0);
+                DEBUG_MY(" when no filament detected\n");
+            } else {
+                DEBUG_MY("Using saved calibration for CH");
+                DEBUG_float(i, 0);
+                DEBUG_MY(" zero=");
+                DEBUG_float(adaptive_pressure[i].zero_point, 3);
+                DEBUG_MY("V\n");
+            }
+        }
     } else {
         DEBUG_MY("Using legacy static pressure thresholds\n");
     }
