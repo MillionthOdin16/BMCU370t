@@ -350,6 +350,7 @@ float get_adaptive_pressure_target(int channel)
 
 /**
  * Get early pressure response value for proactive control
+ * Modified for smoother operation with progressive response scaling
  */
 float get_early_pressure_response(int channel)
 {
@@ -364,18 +365,21 @@ float get_early_pressure_response(int channel)
         return 0.0f; // Need calibration first
     }
     
-    float current_pressure = MC_PULL_stu_raw[channel];
+    // Use smoothed pressure for early response to reduce jerkiness
+    float current_pressure = cal.response_smoothing;
     float pressure_error = current_pressure - cal.neutral_target;
     
-    // Proportional response within deadband for early correction using runtime parameters
+    // Progressive response scaling for smoother operation
     float deadband_half = pressure_tuning.deadband_voltage / 2.0f;
+    float abs_error = fabs(pressure_error);
     
-    if (fabs(pressure_error) < deadband_half) {
-        // Within deadband - apply gentle proportional correction
-        return pressure_error * pressure_tuning.proportional_gain * 0.5f;
+    if (abs_error < deadband_half) {
+        // Within deadband - very gentle proportional correction
+        return pressure_error * pressure_tuning.proportional_gain * 0.1f;
     } else {
-        // Outside deadband - stronger response
-        return pressure_error * pressure_tuning.proportional_gain;
+        // Outside deadband - progressive scaling instead of binary jump
+        float scale_factor = min(1.0f, abs_error / deadband_half);
+        return pressure_error * pressure_tuning.proportional_gain * scale_factor * 0.3f;
     }
 }
 
@@ -536,13 +540,13 @@ void set_pressure_sensitivity_preset(int preset)
     }
     
     switch (preset) {
-        case 0: // Conservative/Stable - slower but very reliable
-            pressure_tuning.proportional_gain = 1.5f;
-            pressure_tuning.high_multiplier = 1.2f;
-            pressure_tuning.low_multiplier = 0.8f;
-            pressure_tuning.response_smoothing = 0.9f;
-            pressure_tuning.deadband_voltage = 0.12f;
-            DEBUG_MY("Applied Conservative sensitivity preset\n");
+        case 0: // Conservative/Stable - ultra-smooth operation for users who prefer smoothness
+            pressure_tuning.proportional_gain = 0.15f;  // Very gentle response
+            pressure_tuning.high_multiplier = 1.15f;    // Conservative thresholds
+            pressure_tuning.low_multiplier = 0.85f;     // Conservative thresholds
+            pressure_tuning.response_smoothing = 0.98f; // Heavy smoothing
+            pressure_tuning.deadband_voltage = 0.2f;    // Larger deadband for stability
+            DEBUG_MY("Applied Conservative sensitivity preset (ultra-smooth)\n");
             break;
             
         case 1: // Normal - balanced performance (default)
@@ -550,13 +554,13 @@ void set_pressure_sensitivity_preset(int preset)
             DEBUG_MY("Applied Normal sensitivity preset (defaults)\n");
             break;
             
-        case 2: // Aggressive/Fast - faster response but may be sensitive
-            pressure_tuning.proportional_gain = 3.0f;
-            pressure_tuning.high_multiplier = 1.4f;
-            pressure_tuning.low_multiplier = 0.6f;
-            pressure_tuning.response_smoothing = 0.7f;
-            pressure_tuning.deadband_voltage = 0.08f;
-            DEBUG_MY("Applied Aggressive sensitivity preset\n");
+        case 2: // Aggressive/Fast - faster response but still smooth
+            pressure_tuning.proportional_gain = 0.8f;   // More responsive than normal
+            pressure_tuning.high_multiplier = 1.4f;     // Tighter thresholds
+            pressure_tuning.low_multiplier = 0.6f;      // Tighter thresholds  
+            pressure_tuning.response_smoothing = 0.85f; // Less smoothing for faster response
+            pressure_tuning.deadband_voltage = 0.1f;    // Smaller deadband for responsiveness
+            DEBUG_MY("Applied Aggressive sensitivity preset (responsive)\n");
             break;
             
         default:

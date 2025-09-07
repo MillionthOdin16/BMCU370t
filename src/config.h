@@ -127,12 +127,12 @@
 // Default adaptive threshold calculation (can be changed at runtime)
 #define PRESSURE_HIGH_MULTIPLIER            1.3f    ///< Default multiplier for high pressure threshold (runtime configurable)
 #define PRESSURE_LOW_MULTIPLIER             0.7f    ///< Default multiplier for low pressure threshold (runtime configurable)
-#define PRESSURE_DEADBAND_VOLTAGE           0.1f    ///< Default minimum deadband around neutral point in V (runtime configurable)
+#define PRESSURE_DEADBAND_VOLTAGE           0.15f   ///< Default minimum deadband around neutral point in V (runtime configurable)
 
-// Default responsive control parameters (can be changed at runtime)
+// Default responsive control parameters (can be changed at runtime) - tuned for smooth operation
 #define PRESSURE_EARLY_RESPONSE_ENABLED     true    ///< Default enable early pressure response (runtime configurable)
-#define PRESSURE_PROPORTIONAL_GAIN          2.0f    ///< Default proportional gain for pressure response (runtime configurable)
-#define PRESSURE_RESPONSE_SMOOTHING         0.8f    ///< Default response smoothing factor (runtime configurable)
+#define PRESSURE_PROPORTIONAL_GAIN          0.3f    ///< Default proportional gain for pressure response (runtime configurable)
+#define PRESSURE_RESPONSE_SMOOTHING         0.95f   ///< Default response smoothing factor (runtime configurable)
 
 // Default range detection during operation (can be changed at runtime)
 #define PRESSURE_RANGE_LEARNING_ENABLED     true    ///< Default enable continuous range learning (runtime configurable)
