@@ -61,10 +61,43 @@
 // Motion Control Configuration
 // =============================================================================
 
-// Voltage thresholds for filament detection (in Volts)
+// Legacy voltage thresholds (used as fallback when adaptive control is disabled)
 #define PULL_VOLTAGE_HIGH       1.85f       ///< High pressure threshold (red LED)
 #define PULL_VOLTAGE_LOW        1.45f       ///< Low pressure threshold (blue LED)
 #define PULL_VOLTAGE_SEND_MAX   1.7f        ///< Maximum voltage for sending filament
+
+// =============================================================================
+// Adaptive Pressure Control Configuration
+// =============================================================================
+
+/**
+ * Adaptive Pressure Control System
+ * 
+ * This system learns individual sensor characteristics to provide more responsive
+ * and robust filament feeding. It addresses sensor variations that cause feed failures
+ * with static thresholds.
+ */
+#define ADAPTIVE_PRESSURE_CONTROL_ENABLED   true    ///< Enable adaptive pressure control system
+
+// Calibration parameters
+#define PRESSURE_CALIBRATION_SAMPLES        50      ///< Number of samples for sensor calibration (20-100 recommended)
+#define PRESSURE_CALIBRATION_TIMEOUT_MS     3000    ///< Maximum time for calibration in ms
+#define PRESSURE_NOISE_THRESHOLD            0.1f    ///< Maximum acceptable sensor noise in V (0.05-0.2 recommended)
+
+// Adaptive threshold calculation
+#define PRESSURE_HIGH_MULTIPLIER            1.3f    ///< Multiplier for high pressure threshold (1.2-1.5 recommended)
+#define PRESSURE_LOW_MULTIPLIER             0.7f    ///< Multiplier for low pressure threshold (0.5-0.8 recommended)
+#define PRESSURE_DEADBAND_VOLTAGE           0.1f    ///< Minimum deadband around neutral point in V
+
+// Responsive control parameters
+#define PRESSURE_EARLY_RESPONSE_ENABLED     true    ///< Enable early pressure response before thresholds
+#define PRESSURE_PROPORTIONAL_GAIN          2.0f    ///< Proportional gain for pressure response (1.0-5.0 recommended)
+#define PRESSURE_RESPONSE_SMOOTHING         0.8f    ///< Response smoothing factor (0.7-0.9 recommended)
+
+// Range detection during operation
+#define PRESSURE_RANGE_LEARNING_ENABLED     true    ///< Enable continuous range learning during operation
+#define PRESSURE_RANGE_UPDATE_RATE          0.1f    ///< Rate of range updates (0.05-0.2 recommended)
+#define PRESSURE_MIN_RANGE_VOLTAGE          0.3f    ///< Minimum expected pressure range in V
 
 // Timing constants (in milliseconds)
 #define ASSIST_SEND_TIME_MS     1200        ///< Filament send assist duration

@@ -1,6 +1,15 @@
 #include "Motion_control.h"
 #include "config.h"
 #include <string.h>  // For memset, memcpy
+#include <math.h>    // For sqrt, fabs
+
+// Helper macros
+#ifndef max
+#define max(a,b) ((a) > (b) ? (a) : (b))
+#endif
+#ifndef min  
+#define min(a,b) ((a) < (b) ? (a) : (b))
+#endif
 
 AS5600_soft_IIC_many MC_AS5600;
 
@@ -29,9 +38,359 @@ float MC_ONLINE_key_stu_raw[MAX_FILAMENT_CHANNELS] = {0, 0, 0, 0}; ///< Raw onli
 int MC_ONLINE_key_stu[MAX_FILAMENT_CHANNELS] = {0, 0, 0, 0};
 int MC_ONLINE_key_stu_prev[MAX_FILAMENT_CHANNELS] = {0, 0, 0, 0}; ///< Previous presence sensor state for edge detection
 
-// Voltage control constants (defined in config.h)
+// Legacy voltage control constants (defined in config.h)
 const float PULL_voltage_up = PULL_VOLTAGE_HIGH;     ///< High pressure threshold - red LED
 const float PULL_voltage_down = PULL_VOLTAGE_LOW;    ///< Low pressure threshold - blue LED
+
+// =============================================================================
+// Adaptive Pressure Control System
+// =============================================================================
+
+// Forward declarations for functions used by adaptive pressure control
+void Motion_control_save();
+bool Motion_control_read();
+
+/**
+ * Adaptive pressure sensor calibration data for each channel
+ */
+struct AdaptivePressureCalibration
+{
+    float zero_point;          ///< Sensor zero point (no pressure voltage)
+    float min_pressure;        ///< Minimum observed pressure voltage
+    float max_pressure;        ///< Maximum observed pressure voltage
+    float high_threshold;      ///< Adaptive high pressure threshold
+    float low_threshold;       ///< Adaptive low pressure threshold
+    float neutral_target;      ///< Target neutral pressure point
+    float range_voltage;       ///< Sensor range (max - min)
+    bool calibrated;           ///< Whether sensor has been calibrated
+    bool range_learned;        ///< Whether operating range has been learned
+    uint32_t sample_count;     ///< Number of calibration samples taken
+    float noise_level;         ///< Estimated sensor noise level
+    float response_smoothing;  ///< Smoothed pressure response value
+} adaptive_pressure[MAX_FILAMENT_CHANNELS];
+
+/**
+ * Initialize adaptive pressure control system
+ */
+void adaptive_pressure_init()
+{
+    for (int i = 0; i < MAX_FILAMENT_CHANNELS; i++) {
+        adaptive_pressure[i].zero_point = 1.65f;      // Default neutral point
+        adaptive_pressure[i].min_pressure = 1.0f;     // Conservative initial range
+        adaptive_pressure[i].max_pressure = 2.3f;     // Conservative initial range
+        adaptive_pressure[i].high_threshold = PULL_VOLTAGE_HIGH;  // Fallback to static
+        adaptive_pressure[i].low_threshold = PULL_VOLTAGE_LOW;    // Fallback to static
+        adaptive_pressure[i].neutral_target = 1.65f;
+        adaptive_pressure[i].range_voltage = 0.4f;    // Initial estimate
+        adaptive_pressure[i].calibrated = false;
+        adaptive_pressure[i].range_learned = false;
+        adaptive_pressure[i].sample_count = 0;
+        adaptive_pressure[i].noise_level = 0.05f;     // Initial noise estimate
+        adaptive_pressure[i].response_smoothing = 0.0f;
+    }
+}
+
+/**
+ * Calibrate pressure sensor zero point when no filament is present
+ */
+void calibrate_pressure_sensor(int channel)
+{
+    if (!ADAPTIVE_PRESSURE_CONTROL_ENABLED || channel < 0 || channel >= MAX_FILAMENT_CHANNELS) {
+        return;
+    }
+    
+    // Only calibrate if no filament is detected
+    if (MC_ONLINE_key_stu[channel] != 0) {
+        return; // Filament present, skip calibration
+    }
+    
+    AdaptivePressureCalibration& cal = adaptive_pressure[channel];
+    
+    if (cal.calibrated && cal.sample_count > PRESSURE_CALIBRATION_SAMPLES) {
+        return; // Already calibrated
+    }
+    
+    // Accumulate samples for zero point detection
+    static float sample_sum[MAX_FILAMENT_CHANNELS] = {0, 0, 0, 0};
+    static float sample_variance[MAX_FILAMENT_CHANNELS] = {0, 0, 0, 0};
+    static uint64_t calibration_start_time[MAX_FILAMENT_CHANNELS] = {0, 0, 0, 0};
+    
+    if (cal.sample_count == 0) {
+        calibration_start_time[channel] = get_time64();
+        sample_sum[channel] = 0.0f;
+        sample_variance[channel] = 0.0f;
+    }
+    
+    // Check for timeout
+    uint64_t current_time = get_time64();
+    if (current_time - calibration_start_time[channel] > PRESSURE_CALIBRATION_TIMEOUT_MS) {
+        // Timeout - use current average or fallback
+        if (cal.sample_count > 10) {
+            cal.zero_point = sample_sum[channel] / cal.sample_count;
+            cal.calibrated = true;
+        }
+        return;
+    }
+    
+    // Add sample
+    float current_reading = MC_PULL_stu_raw[channel];
+    sample_sum[channel] += current_reading;
+    cal.sample_count++;
+    
+    // Calculate variance for noise estimation
+    if (cal.sample_count > 1) {
+        float mean = sample_sum[channel] / cal.sample_count;
+        float delta = current_reading - mean;
+        sample_variance[channel] += delta * delta;
+    }
+    
+    // Complete calibration when enough samples collected
+    if (cal.sample_count >= PRESSURE_CALIBRATION_SAMPLES) {
+        cal.zero_point = sample_sum[channel] / cal.sample_count;
+        cal.neutral_target = cal.zero_point;
+        
+        // Calculate noise level
+        if (cal.sample_count > 1) {
+            cal.noise_level = sqrt(sample_variance[channel] / (cal.sample_count - 1));
+        }
+        
+        // Set initial thresholds based on zero point
+        float base_range = max(0.2f, cal.noise_level * 4.0f);
+        cal.high_threshold = cal.zero_point + base_range * PRESSURE_HIGH_MULTIPLIER;
+        cal.low_threshold = cal.zero_point - base_range * PRESSURE_LOW_MULTIPLIER;
+        
+        // Ensure minimum deadband
+        if (cal.high_threshold - cal.low_threshold < PRESSURE_DEADBAND_VOLTAGE) {
+            float mid_point = (cal.high_threshold + cal.low_threshold) / 2.0f;
+            cal.high_threshold = mid_point + PRESSURE_DEADBAND_VOLTAGE / 2.0f;
+            cal.low_threshold = mid_point - PRESSURE_DEADBAND_VOLTAGE / 2.0f;
+        }
+        
+        cal.calibrated = true;
+        
+        DEBUG_MY("Pressure sensor calibrated CH");
+        DEBUG_float(channel, 0);
+        DEBUG_MY(": zero=");
+        DEBUG_float(cal.zero_point, 3);
+        DEBUG_MY("V noise=");
+        DEBUG_float(cal.noise_level, 3);
+        DEBUG_MY("V high=");
+        DEBUG_float(cal.high_threshold, 3);
+        DEBUG_MY("V low=");
+        DEBUG_float(cal.low_threshold, 3);
+        DEBUG_MY("V\n");
+    }
+}
+
+/**
+ * Update pressure range learning during operation
+ */
+void update_pressure_range_learning(int channel, float pressure_reading)
+{
+    if (!ADAPTIVE_PRESSURE_CONTROL_ENABLED || !PRESSURE_RANGE_LEARNING_ENABLED ||
+        channel < 0 || channel >= MAX_FILAMENT_CHANNELS) {
+        return;
+    }
+    
+    AdaptivePressureCalibration& cal = adaptive_pressure[channel];
+    
+    if (!cal.calibrated) {
+        return; // Must be calibrated first
+    }
+    
+    // Update observed range with smoothing
+    bool range_updated = false;
+    
+    if (pressure_reading < cal.min_pressure) {
+        cal.min_pressure = cal.min_pressure * (1.0f - PRESSURE_RANGE_UPDATE_RATE) + 
+                          pressure_reading * PRESSURE_RANGE_UPDATE_RATE;
+        range_updated = true;
+    }
+    
+    if (pressure_reading > cal.max_pressure) {
+        cal.max_pressure = cal.max_pressure * (1.0f - PRESSURE_RANGE_UPDATE_RATE) + 
+                          pressure_reading * PRESSURE_RANGE_UPDATE_RATE;
+        range_updated = true;
+    }
+    
+    if (range_updated) {
+        // Update calculated range
+        cal.range_voltage = cal.max_pressure - cal.min_pressure;
+        
+        // Ensure minimum range
+        if (cal.range_voltage < PRESSURE_MIN_RANGE_VOLTAGE) {
+            cal.range_voltage = PRESSURE_MIN_RANGE_VOLTAGE;
+        }
+        
+        // Update adaptive thresholds based on learned range
+        float range_margin = cal.range_voltage * 0.3f; // 30% of range for margins
+        cal.high_threshold = cal.zero_point + range_margin * PRESSURE_HIGH_MULTIPLIER;
+        cal.low_threshold = cal.zero_point - range_margin * PRESSURE_LOW_MULTIPLIER;
+        
+        // Clamp to observed limits with safety margin
+        cal.high_threshold = min(cal.high_threshold, cal.max_pressure - 0.05f);
+        cal.low_threshold = max(cal.low_threshold, cal.min_pressure + 0.05f);
+        
+        cal.range_learned = true;
+    }
+}
+
+/**
+ * Calculate adaptive pressure status with early response
+ */
+int calculate_adaptive_pressure_status(int channel)
+{
+    if (!ADAPTIVE_PRESSURE_CONTROL_ENABLED || channel < 0 || channel >= MAX_FILAMENT_CHANNELS) {
+        // Fallback to legacy static thresholds
+        if (MC_PULL_stu_raw[channel] > PULL_voltage_up) {
+            return 1;  // High pressure
+        } else if (MC_PULL_stu_raw[channel] < PULL_voltage_down) {
+            return -1; // Low pressure
+        } else {
+            return 0;  // Normal pressure
+        }
+    }
+    
+    AdaptivePressureCalibration& cal = adaptive_pressure[channel];
+    float current_pressure = MC_PULL_stu_raw[channel];
+    
+    // Update range learning
+    update_pressure_range_learning(channel, current_pressure);
+    
+    // Apply response smoothing
+    cal.response_smoothing = cal.response_smoothing * PRESSURE_RESPONSE_SMOOTHING + 
+                            current_pressure * (1.0f - PRESSURE_RESPONSE_SMOOTHING);
+    
+    float smoothed_pressure = cal.response_smoothing;
+    
+    // Use calibrated thresholds if available
+    float high_threshold = cal.calibrated ? cal.high_threshold : PULL_voltage_up;
+    float low_threshold = cal.calibrated ? cal.low_threshold : PULL_voltage_down;
+    
+    if (smoothed_pressure > high_threshold) {
+        return 1;  // High pressure
+    } else if (smoothed_pressure < low_threshold) {
+        return -1; // Low pressure
+    } else {
+        return 0;  // Normal pressure
+    }
+}
+
+/**
+ * Get adaptive pressure control target for PID controller
+ */
+float get_adaptive_pressure_target(int channel)
+{
+    if (!ADAPTIVE_PRESSURE_CONTROL_ENABLED || channel < 0 || channel >= MAX_FILAMENT_CHANNELS) {
+        return 1.65f; // Fallback to static target
+    }
+    
+    AdaptivePressureCalibration& cal = adaptive_pressure[channel];
+    
+    if (cal.calibrated) {
+        return cal.neutral_target;
+    } else {
+        return 1.65f; // Default until calibrated
+    }
+}
+
+/**
+ * Get early pressure response value for proactive control
+ */
+float get_early_pressure_response(int channel)
+{
+    if (!ADAPTIVE_PRESSURE_CONTROL_ENABLED || !PRESSURE_EARLY_RESPONSE_ENABLED ||
+        channel < 0 || channel >= MAX_FILAMENT_CHANNELS) {
+        return 0.0f; // No early response
+    }
+    
+    AdaptivePressureCalibration& cal = adaptive_pressure[channel];
+    
+    if (!cal.calibrated) {
+        return 0.0f; // Need calibration first
+    }
+    
+    float current_pressure = MC_PULL_stu_raw[channel];
+    float pressure_error = current_pressure - cal.neutral_target;
+    
+    // Proportional response within deadband for early correction
+    float deadband_half = PRESSURE_DEADBAND_VOLTAGE / 2.0f;
+    
+    if (fabs(pressure_error) < deadband_half) {
+        // Within deadband - apply gentle proportional correction
+        return pressure_error * PRESSURE_PROPORTIONAL_GAIN * 0.5f;
+    } else {
+        // Outside deadband - stronger response
+        return pressure_error * PRESSURE_PROPORTIONAL_GAIN;
+    }
+}
+
+/**
+ * Reset adaptive pressure calibration for a specific channel
+ * Useful for troubleshooting or when mechanical changes are made
+ */
+void reset_adaptive_pressure_calibration(int channel)
+{
+    if (!ADAPTIVE_PRESSURE_CONTROL_ENABLED || channel < 0 || channel >= MAX_FILAMENT_CHANNELS) {
+        return;
+    }
+    
+    AdaptivePressureCalibration& cal = adaptive_pressure[channel];
+    
+    // Reset to default values
+    cal.zero_point = 1.65f;
+    cal.min_pressure = 1.0f;
+    cal.max_pressure = 2.3f;
+    cal.high_threshold = PULL_VOLTAGE_HIGH;
+    cal.low_threshold = PULL_VOLTAGE_LOW;
+    cal.neutral_target = 1.65f;
+    cal.range_voltage = 0.4f;
+    cal.calibrated = false;
+    cal.range_learned = false;
+    cal.sample_count = 0;
+    cal.noise_level = 0.05f;
+    cal.response_smoothing = 0.0f;
+    
+    // Save to flash
+    Motion_control_save();
+    
+    DEBUG_MY("Adaptive pressure calibration reset for channel ");
+    DEBUG_float(channel, 0);
+    DEBUG_MY("\n");
+}
+
+/**
+ * Reset all adaptive pressure calibrations
+ */
+void reset_all_adaptive_pressure_calibration()
+{
+    if (!ADAPTIVE_PRESSURE_CONTROL_ENABLED) {
+        return;
+    }
+    
+    for (int channel = 0; channel < MAX_FILAMENT_CHANNELS; channel++) {
+        AdaptivePressureCalibration& cal = adaptive_pressure[channel];
+        
+        // Reset to default values but don't save yet
+        cal.zero_point = 1.65f;
+        cal.min_pressure = 1.0f;
+        cal.max_pressure = 2.3f;
+        cal.high_threshold = PULL_VOLTAGE_HIGH;
+        cal.low_threshold = PULL_VOLTAGE_LOW;
+        cal.neutral_target = 1.65f;
+        cal.range_voltage = 0.4f;
+        cal.calibrated = false;
+        cal.range_learned = false;
+        cal.sample_count = 0;
+        cal.noise_level = 0.05f;
+        cal.response_smoothing = 0.0f;
+    }
+    
+    // Save all changes to flash at once
+    Motion_control_save();
+    
+    DEBUG_MY("All adaptive pressure calibrations reset\n");
+}
 
 // Motion assist variables
 bool Assist_send_filament[MAX_FILAMENT_CHANNELS] = {false, false, false, false};
@@ -85,17 +444,25 @@ void MC_PULL_ONLINE_read()
             DEBUG_MY("   \n");
         }
         */
-        if (MC_PULL_stu_raw[i] > PULL_voltage_up) // 大于1.85V,表示压力过高
-        {
-            MC_PULL_stu[i] = 1;
-        }
-        else if (MC_PULL_stu_raw[i] < PULL_voltage_down) // 小于1.45V，表示压力过低
-        {
-            MC_PULL_stu[i] = -1;
-        }
-        else // 1.4~1.7之间，在正常误差范围内，无需动作
-        {
-            MC_PULL_stu[i] = 0;
+        
+        // Calibrate pressure sensor when no filament is present
+        if (ADAPTIVE_PRESSURE_CONTROL_ENABLED) {
+            calibrate_pressure_sensor(i);
+            MC_PULL_stu[i] = calculate_adaptive_pressure_status(i);
+        } else {
+            // Legacy static threshold logic
+            if (MC_PULL_stu_raw[i] > PULL_voltage_up) // 大于1.85V,表示压力过高
+            {
+                MC_PULL_stu[i] = 1;
+            }
+            else if (MC_PULL_stu_raw[i] < PULL_voltage_down) // 小于1.45V，表示压力过低
+            {
+                MC_PULL_stu[i] = -1;
+            }
+            else // 1.4~1.7之间，在正常误差范围内，无需动作
+            {
+                MC_PULL_stu[i] = 0;
+            }
         }
         /*在线状态*/
 
@@ -153,6 +520,18 @@ struct alignas(4) Motion_control_save_struct
 {
     int Motion_control_dir[4];
     bool auto_learned[4];  ///< Whether direction was learned automatically vs static correction
+    
+    // Adaptive pressure control calibration data
+    struct {
+        float zero_point;          ///< Sensor zero point (no pressure voltage)
+        float high_threshold;      ///< Adaptive high pressure threshold
+        float low_threshold;       ///< Adaptive low pressure threshold
+        float neutral_target;      ///< Target neutral pressure point
+        float noise_level;         ///< Estimated sensor noise level
+        bool calibrated;           ///< Whether sensor has been calibrated
+        uint32_t reserved[2];      ///< Reserved for future use
+    } pressure_cal[4];
+    
     int check = 0x40614061;
 } Motion_control_data_save;
 
@@ -196,12 +575,39 @@ bool Motion_control_read()
     if (ptr->check == 0x40614061)
     {
         memcpy(&Motion_control_data_save, ptr, sizeof(Motion_control_save_struct));
+        
+        // Load adaptive pressure calibration data if available
+        if (ADAPTIVE_PRESSURE_CONTROL_ENABLED) {
+            for (int i = 0; i < MAX_FILAMENT_CHANNELS; i++) {
+                if (Motion_control_data_save.pressure_cal[i].calibrated) {
+                    adaptive_pressure[i].zero_point = Motion_control_data_save.pressure_cal[i].zero_point;
+                    adaptive_pressure[i].high_threshold = Motion_control_data_save.pressure_cal[i].high_threshold;
+                    adaptive_pressure[i].low_threshold = Motion_control_data_save.pressure_cal[i].low_threshold;
+                    adaptive_pressure[i].neutral_target = Motion_control_data_save.pressure_cal[i].neutral_target;
+                    adaptive_pressure[i].noise_level = Motion_control_data_save.pressure_cal[i].noise_level;
+                    adaptive_pressure[i].calibrated = Motion_control_data_save.pressure_cal[i].calibrated;
+                }
+            }
+        }
+        
         return true;
     }
     return false;
 }
 void Motion_control_save()
 {
+    // Save adaptive pressure calibration data
+    if (ADAPTIVE_PRESSURE_CONTROL_ENABLED) {
+        for (int i = 0; i < MAX_FILAMENT_CHANNELS; i++) {
+            Motion_control_data_save.pressure_cal[i].zero_point = adaptive_pressure[i].zero_point;
+            Motion_control_data_save.pressure_cal[i].high_threshold = adaptive_pressure[i].high_threshold;
+            Motion_control_data_save.pressure_cal[i].low_threshold = adaptive_pressure[i].low_threshold;
+            Motion_control_data_save.pressure_cal[i].neutral_target = adaptive_pressure[i].neutral_target;
+            Motion_control_data_save.pressure_cal[i].noise_level = adaptive_pressure[i].noise_level;
+            Motion_control_data_save.pressure_cal[i].calibrated = adaptive_pressure[i].calibrated;
+        }
+    }
+    
     Flash_saves(&Motion_control_data_save, sizeof(Motion_control_save_struct), Motion_control_save_flash_addr);
 }
 
@@ -405,7 +811,9 @@ public:
                 // 已经触发过，或微动触发在其他状态
                 if (MC_ONLINE_key_stu[CHx] != 0 && MC_PULL_stu[CHx] != 0)
                 { // 如果滑块被人为拉动，做出对应响应
-                    x = dir * PID_pressure.caculate(MC_PULL_stu_raw[CHx] - 1.65, time_E);
+                    float idle_target = ADAPTIVE_PRESSURE_CONTROL_ENABLED ? 
+                                       get_adaptive_pressure_target(CHx) : 1.65f;
+                    x = dir * PID_pressure.caculate(MC_PULL_stu_raw[CHx] - idle_target, time_E);
                 }
                 else
                 { // 否则，保持停机
@@ -419,17 +827,39 @@ public:
             if (motion == filament_motion_enum::filament_motion_pressure_ctrl_on_use) // 在使用状态
             {
                 if (pull_state_old) { // 首次进入使用中，不触发后退，冲刷会让缓冲归位.
-                    if (MC_PULL_stu_raw[CHx] < 1.55){
+                    float low_trigger = ADAPTIVE_PRESSURE_CONTROL_ENABLED ? 
+                                       get_adaptive_pressure_target(CHx) - 0.1f : 1.55f;
+                    if (MC_PULL_stu_raw[CHx] < low_trigger){
                         pull_state_old = false; // 检测到耗材已处于低压力。
                     }
                 } else {
-                    if (MC_PULL_stu_raw[CHx] < 1.65)
-                    {
-                        x = _get_x_by_pressure(MC_PULL_stu_raw[CHx], 1.65, time_E, pressure_control_enum::less_pressure);
-                    }
-                    else if (MC_PULL_stu_raw[CHx] > 1.7)
-                    {
-                        x = _get_x_by_pressure(MC_PULL_stu_raw[CHx], 1.7, time_E, pressure_control_enum::over_pressure);
+                    // Use adaptive pressure control if enabled
+                    if (ADAPTIVE_PRESSURE_CONTROL_ENABLED) {
+                        float pressure_target = get_adaptive_pressure_target(CHx);
+                        float early_response = get_early_pressure_response(CHx);
+                        
+                        // Apply early response for proactive control
+                        if (fabs(early_response) > 0.01f) {
+                            x = dir * early_response * 100.0f; // Scale early response
+                        }
+                        
+                        // Traditional threshold-based control for larger deviations
+                        if (MC_PULL_stu[CHx] == -1) { // Low pressure detected by adaptive system
+                            x = _get_x_by_pressure(MC_PULL_stu_raw[CHx], pressure_target, time_E, pressure_control_enum::less_pressure);
+                        }
+                        else if (MC_PULL_stu[CHx] == 1) { // High pressure detected by adaptive system
+                            x = _get_x_by_pressure(MC_PULL_stu_raw[CHx], pressure_target + 0.05f, time_E, pressure_control_enum::over_pressure);
+                        }
+                    } else {
+                        // Legacy static pressure control
+                        if (MC_PULL_stu_raw[CHx] < 1.65)
+                        {
+                            x = _get_x_by_pressure(MC_PULL_stu_raw[CHx], 1.65, time_E, pressure_control_enum::less_pressure);
+                        }
+                        else if (MC_PULL_stu_raw[CHx] > 1.7)
+                        {
+                            x = _get_x_by_pressure(MC_PULL_stu_raw[CHx], 1.7, time_E, pressure_control_enum::over_pressure);
+                        }
                     }
                 }
             }
@@ -1712,6 +2142,15 @@ void Motion_control_init() // 初始化所有运动和传感器
 {
     MC_PULL_ONLINE_init();
     MC_PULL_ONLINE_read();
+    
+    // Initialize adaptive pressure control system
+    if (ADAPTIVE_PRESSURE_CONTROL_ENABLED) {
+        adaptive_pressure_init();
+        DEBUG_MY("Adaptive pressure control enabled\n");
+    } else {
+        DEBUG_MY("Using legacy static pressure thresholds\n");
+    }
+    
     MOTOR_init();
     
     /*

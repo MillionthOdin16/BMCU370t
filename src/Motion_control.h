@@ -18,3 +18,12 @@ extern void reset_all_learned_directions();
 extern void start_loading_direction_detection(int channel);
 extern void update_loading_direction_detection(int channel);
 extern void complete_loading_direction_detection(int channel);
+
+// Adaptive pressure control functions
+extern void adaptive_pressure_init();
+extern void calibrate_pressure_sensor(int channel);
+extern int calculate_adaptive_pressure_status(int channel);
+extern float get_adaptive_pressure_target(int channel);
+extern float get_early_pressure_response(int channel);
+extern void reset_adaptive_pressure_calibration(int channel);
+extern void reset_all_adaptive_pressure_calibration();
