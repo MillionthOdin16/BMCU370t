@@ -74,6 +74,10 @@ The complete hardware design is documented in the following schematic files:
 - **Boot Button**: B3U-1000PM tactile switch (SW2) 
 - **Status Indicators**: Accessible via main RGB LED
 - **Programming Header**: 4-pin 2.54mm header (H1, H2) for SWD
+- **USB Programming Port**: USB-C connector for firmware updates and communication
+  - **USB Pins**: PA11 (USB_DM), PA12 (USB_DP)
+  - **Protocol**: USB 2.0 Full Speed Device (12 Mbps)
+  - **Functions**: DFU bootloader, serial communication, debugging
 
 ## Sensor Board Component Specifications
 

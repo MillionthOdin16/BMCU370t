@@ -94,15 +94,28 @@ Pin 7: NRST (reset input)
 Pin 44: BOOT0 (boot mode selection)
 Pin 37: SWCLK (SWD programming clock)
 Pin 34: SWIO (SWD programming data)
+Pin 18: PA11 (USB_DM, also RGB Channel 0)
+Pin 19: PA12 (USB_DP)
+```
+
+### USB Interface
+```
+USB-C Connector: Firmware programming and communication
+Pin 18 (PA11): USB_DM - USB Data Minus
+Pin 19 (PA12): USB_DP - USB Data Plus
+Protocol: USB 2.0 Full Speed Device (12 Mbps)
+Functions: DFU bootloader, serial communication, debugging
 ```
 
 ### Channel Interfaces (Pins per channel)
 ```
-Channel 0: I2C=10/11, ADC=25/2, Motor=38/39, RGB=18
-Channel 1: I2C=12/13, ADC=26/3, Motor=40/41, RGB=19
-Channel 2: I2C=14/15, ADC=27/4, Motor=42/43, RGB=29
-Channel 3: I2C=16/17, ADC=28/5, Motor=45/46, RGB=32
+Channel 0: I2C=10/11, ADC=25/2, Motor=38/39, RGB=18 (PA11/USB_DM)
+Channel 1: I2C=12/13, ADC=26/3, Motor=40/41, RGB=19 (PA8)
+Channel 2: I2C=14/15, ADC=27/4, Motor=42/43, RGB=29 (PB1)
+Channel 3: I2C=16/17, ADC=28/5, Motor=45/46, RGB=32 (PB0)
 ```
+
+**Note**: Pin 18 (PA11) serves dual function as RGB Channel 0 and USB_DM. When USB is active, RGB Channel 0 is unavailable.
 
 ### Communication
 ```
