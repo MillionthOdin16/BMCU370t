@@ -73,6 +73,10 @@ Complete hardware design documentation is available in the [`docs/hardware/`](do
   - Detailed pin assignments verified from schematic analysis
   - Power supply design and thermal management guidelines
   - Assembly procedures and quality control requirements
+- **[Bill of Materials](docs/hardware/BOM.md)** - Complete parts list for building BMCU370
+  - Comprehensive component specifications and sourcing information
+  - Cost estimates and supplier recommendations
+  - Assembly requirements and quality control procedures
 - **[Assembly Instructions](docs/assembly/)** - Physical assembly documentation
 - **[CI/CD Guide](docs/firmware/CI-CD.md)** - Build automation and deployment
 

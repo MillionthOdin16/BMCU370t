@@ -15,6 +15,7 @@ Firmware-specific documentation including APIs, protocols, and development guide
 ### 📁 `hardware/`
 Hardware-related documentation and schematic files:
 - **HARDWARE.md** - Complete hardware specifications, components, and assembly
+- **BOM.md** - Comprehensive bill of materials with part numbers and sourcing information
 - **SCHEMATICS.md** - Detailed schematic file navigation and component reference
 - **Official Schematics (Sept 11, 2025)**:
   - `SCH_Schematic1_2025-09-11.pdf` - Main controller board schematic
@@ -42,6 +43,7 @@ Development and programming tools:
 | **Getting Started** | [firmware/DEV-BUILD-QUICK-START.md](firmware/DEV-BUILD-QUICK-START.md) | Quick development setup |
 | **API Reference** | [firmware/API.md](firmware/API.md) | Complete API documentation |
 | **Hardware Setup** | [hardware/HARDWARE.md](hardware/HARDWARE.md) | Hardware configuration and schematics |
+| **Bill of Materials** | [hardware/BOM.md](hardware/BOM.md) | Complete parts list with sourcing info |
 | **Schematic Files** | [hardware/](hardware/) | Official PDF/PNG/SVG schematics and netlists |
 | **Assembly Guide** | [assembly/BMU370C Assembly Instructions.pdf](assembly/BMU370C%20Assembly%20Instructions.pdf) | Physical assembly |
 | **CI/CD Pipeline** | [firmware/CI-CD.md](firmware/CI-CD.md) | Build automation |
