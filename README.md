@@ -32,6 +32,25 @@ The BMCU370 is a sophisticated multi-material 3D printing controller designed fo
 - **Indicators**: RGB LED strips (NeoPixel compatible)
 - **ADC**: 8-channel DMA-enabled analog input
 
+### Schematic Documentation
+
+Complete hardware design documentation is available in the [`docs/hardware/`](docs/hardware/) directory:
+
+**Official Schematics** (September 11, 2025):
+- **Main Controller Board**: [`SCH_Schematic1_2025-09-11.pdf`](docs/hardware/SCH_Schematic1_2025-09-11.pdf)
+- **Sensor Interface Board**: [`SCH_Schematic1_1_2025-09-11.pdf`](docs/hardware/SCH_Schematic1_1_2025-09-11.pdf)
+- **Vector Graphics**: Available in SVG and PNG formats for web viewing
+- **Component Lists**: Detailed netlists with part numbers and values
+- **PCB Design**: EasyEDA project file and Gerber manufacturing files
+
+**Key Features Documented:**
+- 24V input power with 3.3V regulation via switching regulator
+- 4-channel motor drivers with current sensing (680mΩ resistors)
+- RS485 communication interface with ESD protection
+- ITR9606 optical sensors for filament detection
+- Comprehensive I2C interfaces with 10kΩ pull-up resistor arrays
+- RGB LED control for status indication and channel identification
+
 ## Resources
 
 - **English Wiki**: https://wiki.yuekai.fr/
@@ -47,7 +66,13 @@ The BMCU370 is a sophisticated multi-material 3D printing controller designed fo
 
 - **[Quick Start Guide](docs/firmware/DEV-BUILD-QUICK-START.md)** - Get started in 2 minutes
 - **[API Documentation](docs/firmware/API.md)** - Complete firmware API reference
-- **[Hardware Guide](docs/hardware/HARDWARE.md)** - Hardware specifications and setup
+- **[Hardware Guide](docs/hardware/HARDWARE.md)** - Hardware specifications, schematics, and assembly
+  - Complete component specifications with part numbers and values
+  - Official schematic files (PDF, PNG, SVG) and netlists
+  - PCB design files including EasyEDA project and Gerber files
+  - Detailed pin assignments verified from schematic analysis
+  - Power supply design and thermal management guidelines
+  - Assembly procedures and quality control requirements
 - **[Assembly Instructions](docs/assembly/)** - Physical assembly documentation
 - **[CI/CD Guide](docs/firmware/CI-CD.md)** - Build automation and deployment
 

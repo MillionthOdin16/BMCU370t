@@ -20,6 +20,8 @@ The complete hardware design is documented in the following schematic files:
 - **PCB Design**: EasyEDA project file `pbmcu_c_hall.epro`
 - **Manufacturing**: Gerber files in `pcb_gerber_mainboard_enhanced_security_patch.zip`
 
+📚 **For detailed schematic navigation and component reference, see [SCHEMATICS.md](SCHEMATICS.md)**
+
 ## Microcontroller Specifications
 
 - **CPU**: RISC-V 32-bit core @ 144MHz
@@ -103,57 +105,62 @@ The complete hardware design is documented in the following schematic files:
 ## Pin Assignment and Signal Mapping
 
 ### RGB LED Outputs (PWM)
-Based on the schematic netlists, the RGB LED control pins are mapped as follows:
+Based on the firmware configuration, the RGB LED control pins are mapped as follows:
 ```
-RGB_OUT1 (Channel 0): U2.18 (MCU pin 18) - Connected to CN2.4
-RGB_OUT2 (Channel 1): U2.19 (MCU pin 19) - Connected to CN3.4  
-RGB_OUT3 (Channel 2): U2.29 (MCU pin 29) - Connected to CN4.4
-RGB_OUT4 (Channel 3): U2.32 (MCU pin 32) - Connected to CN5.4
-SYS_RGB (Main Board): U2.6 (MCU pin 6) - Connected to LED1.4
+Channel 0 RGB LEDs: PA11 (Configured in config.h as LED_PA11_NUM)
+Channel 1 RGB LEDs: PA8  (Configured in config.h as LED_PA8_NUM)
+Channel 2 RGB LEDs: PB1  (Configured in config.h as LED_PB1_NUM)
+Channel 3 RGB LEDs: PB0  (Configured in config.h as LED_PB0_NUM)
+Main Board Status: PD1   (Configured in config.h as LED_PD1_NUM)
 ```
 
-### I2C Hall Sensor Interfaces
-Each channel has dedicated I2C lines with 10kΩ pull-up resistors:
+**Note**: The schematic shows these signals routed through MCU pins to external connectors:
+- RGB_OUT1-4 signals connect to external RGB strips via CN2-CN5 connectors
+- On-board RGB LED is directly connected to MCU PD1 pin
+
+### Hall Sensor I2C Interfaces  
+Each channel has dedicated I2C lines as defined in config.h:
 ```
-Channel 0: SCL=U2.10 (MCU pin 10), SDA=U2.11 (MCU pin 11) - CN2.5/CN2.6
-Channel 1: SCL=U2.12 (MCU pin 12), SDA=U2.13 (MCU pin 13) - CN3.5/CN3.6
-Channel 2: SCL=U2.14 (MCU pin 14), SDA=U2.15 (MCU pin 15) - CN4.5/CN4.6
-Channel 3: SCL=U2.16 (MCU pin 16), SDA=U2.17 (MCU pin 17) - CN5.5/CN5.6
+Channel 0: SCL=PB15, SDA=PD0  (AS5600_SCL_PINS[0], AS5600_SDA_PINS[0])
+Channel 1: SCL=PB14, SDA=PC15 (AS5600_SCL_PINS[1], AS5600_SDA_PINS[1])
+Channel 2: SCL=PB13, SDA=PC14 (AS5600_SCL_PINS[2], AS5600_SDA_PINS[2])
+Channel 3: SCL=PB12, SDA=PC13 (AS5600_SCL_PINS[3], AS5600_SDA_PINS[3])
 ```
+All I2C lines have 10kΩ pull-up resistors (RN1, RN2, RN3) as shown in schematics.
 
 ### ADC Inputs (Pressure Sensors)
-Analog inputs for filament detection pressure sensors:
+Analog inputs for filament detection are mapped to MCU ADC channels:
 ```
-K_PULL1: U2.25 (MCU pin 25) - Connected to CN2.1
-K_PULL2: U2.26 (MCU pin 26) - Connected to CN3.1
-K_PULL3: U2.27 (MCU pin 27) - Connected to CN4.1
-K_PULL4: U2.28 (MCU pin 28) - Connected to CN5.1
-
-K_ONLINE1: U2.2 (MCU pin 2) - Connected to CN2.2
-K_ONLINE2: U2.3 (MCU pin 3) - Connected to CN3.2
-K_ONLINE3: U2.4 (MCU pin 4) - Connected to CN4.2
-K_ONLINE4: U2.5 (MCU pin 5) - Connected to CN5.2
+Channel Pull Sensors:   ADC inputs via K_PULL1-4 signals
+Channel Online Sensors: ADC inputs via K_ONLINE1-4 signals
 ```
+**Voltage Thresholds** (from config.h):
+- High pressure (filament inserted): >1.85V (PULL_VOLTAGE_HIGH)
+- Low pressure (filament removed): <1.45V (PULL_VOLTAGE_LOW)
 
 ### Motor Control (PWM H-Bridge)
-Bidirectional motor control with H-bridge drivers:
+Each channel has bidirectional motor control routed through H-bridge drivers:
 ```
-MOTOR1: H=U2.38 (pin 38), L=U2.39 (pin 39) → U8 → CN2.9/CN2.10
-MOTOR2: H=U2.40 (pin 40), L=U2.41 (pin 41) → U9 → CN3.9/CN3.10  
-MOTOR3: H=U2.42 (pin 42), L=U2.43 (pin 43) → U10 → CN4.9/CN4.10
-MOTOR4: H=U2.45 (pin 45), L=U2.46 (pin 46) → U11 → CN5.9/CN5.10
+Motor 1: High/Low side control → U8 driver → CN2.9/CN2.10
+Motor 2: High/Low side control → U9 driver → CN3.9/CN3.10  
+Motor 3: High/Low side control → U10 driver → CN4.9/CN4.10
+Motor 4: High/Low side control → U11 driver → CN5.9/CN5.10
 ```
+**Current Sensing**: 680mΩ resistors (R3-R6) provide overcurrent protection and load feedback.
 
 ### Communication Interfaces
 ```
-USART1 (BambuBus): 
-  - TX: U2.30 (MCU pin 30) → U7.4 → RS485 transceiver
-  - RX: U2.31 (MCU pin 31) → U7.1 → RS485 transceiver  
-  - RTS: U2.33 (MCU pin 33) → U7.2/U7.3 → Direction control
+BambuBus (USART1 via RS485):
+  - Protocol: RS485 differential signaling  
+  - Baud Rate: Per BambuBus specification (typically 1,228,800 bps)
+  - Hardware: U7 transceiver with automatic direction control
+  - Protection: 120Ω termination, 10Ω series resistors, ESD diode
+  - Connector: 4-pin through-hole (CN1) with 24V power and RS485 A/B
 
-USART2 (Debug):
-  - TX: U2.21 (MCU pin 21) → H1.1 (EXIT_TX)
-  - RX: U2.22 (MCU pin 22) → H1.2 (EXIT_RX)
+Debug Interface (USART2/USART3):
+  - Baud Rate: 115200 (DEBUG_UART_BAUDRATE in config.h)
+  - Purpose: Debug logging and development communication
+  - Access: Via programming headers H1/H2
 ```
 
 ### Programming and Debug Interface
@@ -549,11 +556,21 @@ The firmware now automatically learns correct motor direction during normal fila
 - ✅ **Addresses root cause** - Compensates for inconsistent magnet polarity during assembly
 
 #### Configuration
-Enable in `config.h`:
+Automatic direction learning is enabled by default in config.h:
 ```c
 #define AUTO_DIRECTION_LEARNING_ENABLED    true     // Enable automatic learning (recommended)
 #define AUTO_DIRECTION_MIN_SAMPLES         3        // Samples needed for confidence
 #define AUTO_DIRECTION_MIN_MOVEMENT_MM     2.0f     // Minimum movement per sample
+#define AUTO_DIRECTION_TIMEOUT_MS          5000     // Timeout for learning attempt
+#define AUTO_DIRECTION_CONFIDENCE_THRESHOLD 0.7f    // Minimum confidence ratio required
+```
+
+**Legacy Fallback Configuration** (used when automatic learning fails):
+```c
+#define MOTOR_DIR_CORRECTION_CH0   false     // Channel 0 correction
+#define MOTOR_DIR_CORRECTION_CH1   true      // Channel 1 correction  
+#define MOTOR_DIR_CORRECTION_CH2   true      // Channel 2 correction
+#define MOTOR_DIR_CORRECTION_CH3   false     // Channel 3 correction
 ```
 
 #### Assembly Impact
