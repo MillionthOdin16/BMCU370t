@@ -3,6 +3,8 @@
 
 #include "BambuBus.h"
 #include "Adafruit_NeoPixel.h"
+#include "usb_protocol.h"
+#include "usb_status_api.h"
 
 extern void debug_send_run();
 
@@ -81,6 +83,7 @@ void setup()
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_WWDG, DISABLE); // Disable watchdog
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
     GPIO_PinRemapConfig(GPIO_Remap_PD01, ENABLE);
+    
     // Initialize RGB lights
     RGB_init();
     // Update RGB display
@@ -91,6 +94,11 @@ void setup()
     BambuBus_init();
     DEBUG_init();
     Motion_control_init();
+    
+    // Initialize USB communication components
+    usb_status_api_init();
+    usb_protocol_init();
+    
     delay(1);
 }
 
@@ -171,6 +179,10 @@ void loop()
         static int error = 0;
         bool motion_can_run = false;
         uint16_t device_type = get_now_BambuBus_device_type();
+        
+        // Update USB status with current BambuBus status
+        usb_status_update_bambubus_status(stu);
+        
         if (stu != BambuBus_package_type::NONE) // have data/offline
         {
             motion_can_run = true;
@@ -198,6 +210,9 @@ void loop()
         else
         {
         } // wait for data
+        
+        // Run USB protocol handler
+        usb_protocol_run();
         // Log output
         if (is_first_run != stu)
         {

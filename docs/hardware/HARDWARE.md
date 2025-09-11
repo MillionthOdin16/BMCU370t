@@ -1,59 +1,191 @@
 # Hardware Configuration Guide
 
-This guide provides detailed information about the hardware setup and configuration for the BMCU370 system.
+This guide provides detailed information about the hardware setup and configuration for the BMCU370 system, based on the official schematics dated September 11, 2025.
 
 ## Overview
 
-The BMCU370 is built around the CH32V203C8T6 microcontroller, a RISC-V based MCU designed for embedded applications.
+The BMCU370 is built around the CH32V203C8T6 microcontroller, a RISC-V based MCU designed for embedded applications. The hardware consists of two main PCB modules:
+
+1. **Main Controller Board** - Contains the CH32V203 MCU, power management, motor drivers, and communication interfaces
+2. **Sensor Interface Board** - Contains optical sensors (ITR9606) for filament detection and additional interface circuitry
+
+## Schematic Documentation
+
+The complete hardware design is documented in the following schematic files:
+
+- **Main Schematic** (Controller Board): `SCH_Schematic1_2025-09-11.pdf`
+- **Sensor Board Schematic**: `SCH_Schematic1_1_2025-09-11.pdf`
+- **Vector Graphics**: Available in SVG and PNG formats
+- **Netlists**: Component and connection details in `Netlist_Schematic1_*.tel.txt`
+- **PCB Design**: EasyEDA project file `pbmcu_c_hall.epro`
+- **Manufacturing**: Gerber files in `pcb_gerber_mainboard_enhanced_security_patch.zip`
+
+📚 **For detailed schematic navigation and component reference, see [SCHEMATICS.md](SCHEMATICS.md)**
 
 ## Microcontroller Specifications
 
 - **CPU**: RISC-V 32-bit core @ 144MHz
 - **Flash Memory**: 64KB
 - **RAM**: 20KB
+- **Package**: LQFP-48 (7.0×7.0mm, 0.50mm pitch)
 - **GPIO Pins**: 37 available
 - **Timers**: 4x 16-bit, 2x watchdog
 - **Communication**: 3x USART, 2x I2C, 2x SPI
 - **ADC**: 12-bit, 10 channels with DMA support
+- **Programming**: SWD interface (SWCLK, SWIO)
+- **Reset**: External reset with RC circuit
+- **Boot Mode**: BOOT0/BOOT1 configuration pins
 
-## Pin Assignment
+## Main Board Component Specifications
 
-### RGB LED Outputs
+### Power Management
+- **Input Power**: 24V via CONN-TH_4P-P3.00 connector (CN1)
+- **Voltage Regulator**: SOT-23-6 package (U1) - 24V to 3.3V conversion
+- **Power Filter**: 10µH inductor (L1), 22µF capacitors (C2, C3, C4)
+- **Decoupling**: 100nF capacitors (C5-C16) throughout the board
+- **Crystal**: 47pF load capacitors (C1) for main oscillator
+
+### Motor Drivers
+- **Driver ICs**: 4x ESOP-8 packages (U8, U9, U10, U11) 
+- **Current Sensing**: 680mΩ sense resistors (R3, R4, R5, R6)
+- **Output Filtering**: 100nF capacitors (C13-C16) on 24V motor supply
+- **Control Signals**: H-bridge control from MCU pins
+- **Protection**: SMB diode (D1) for reverse polarity protection
+
+### Communication Interface
+- **RS485 Transceiver**: SOP-8 package (U7)
+- **Termination**: 120Ω resistor (R9) 
+- **Line Protection**: 10Ω series resistors (R7, R8)
+- **ESD Protection**: SOT-23-3 diode (D2)
+- **External Interface**: 4-pin connector (CN1) for RS485 bus
+
+### Sensor Interfaces
+- **Hall Sensor Connectors**: 4x CONN-SMD_10P-P2.00 (CN2, CN3, CN4, CN5)
+- **I2C Pull-ups**: 3x 8-resistor arrays (RN1, RN2, RN3) - 10kΩ values
+- **Voltage References**: Dedicated VREF networks for sensor power
+
+### RGB LED Control  
+- **Status LED**: 5050RGBC package (LED1) on main board
+- **PWM Outputs**: 4 channels for external RGB strips (PA11, PA8, PB1, PB0)
+- **Level Shifting**: Built into MCU GPIO configuration
+
+### User Interface
+- **Reset Button**: B3U-1000PM tactile switch (SW1)
+- **Boot Button**: B3U-1000PM tactile switch (SW2) 
+- **Status Indicators**: Accessible via main RGB LED
+- **Programming Header**: 4-pin 2.54mm header (H1, H2) for SWD
+- **USB Programming Port**: USB-C connector for firmware updates and communication
+  - **USB Pins**: PA11 (USB_DM), PA12 (USB_DP)
+  - **Protocol**: USB 2.0 Full Speed Device (12 Mbps)
+  - **Functions**: DFU bootloader, serial communication, debugging
+
+## Sensor Board Component Specifications
+
+### Optical Sensors
+- **Sensor Type**: ITR9606 optical sensors (U7, U8)
+- **Package**: Through-hole 4-pin
+- **Function**: Filament presence detection
+- **LED Drive**: 470Ω current limiting resistors (R1, R2)
+- **Pull-up Resistors**: 1kΩ values (R3, R4)
+- **Supply Voltage**: 3.3V operation
+
+### Signal Processing
+- **Amplifier/Comparator**: SOIC-8 and SOIC-8 packages (U1, U6)
+- **Reference Voltage**: Precision voltage reference network
+- **Output Buffering**: Multiple 10kΩ resistor arrays (RN1, RN2)
+- **Decoupling**: 100nF capacitors (C6, C7, C8)
+
+### Interface Connector
+- **Main Connector**: CONN-SMD_10P-P2.00 (CN2)
+- **Signals**: 3.3V, GND, sensor outputs, I2C, RGB control
+- **Status LEDs**: 0603 package indicators (LED2, LED3)
+- **RGB LED**: 5050RGBC package (LED1)
+
+### Test Points
+- **Test Points**: 0.5mm test points (TP6-TP10)
+- **Functions**: K_ONLINE, K_PULL, RGB_OUT, 3.3V, GND
+- **Accessibility**: For production testing and debugging
+
+## Pin Assignment and Signal Mapping
+
+### RGB LED Outputs (PWM)
+Based on the firmware configuration, the RGB LED control pins are mapped as follows:
 ```
-PA11 - Channel 0 RGB LEDs (Neopixel)
-PA8  - Channel 1 RGB LEDs (Neopixel)
-PB1  - Channel 2 RGB LEDs (Neopixel)
-PB0  - Channel 3 RGB LEDs (Neopixel)
-PD1  - Main Board Status RGB LED
+Channel 0 RGB LEDs: PA11 (Configured in config.h as LED_PA11_NUM)
+Channel 1 RGB LEDs: PA8  (Configured in config.h as LED_PA8_NUM)
+Channel 2 RGB LEDs: PB1  (Configured in config.h as LED_PB1_NUM)
+Channel 3 RGB LEDs: PB0  (Configured in config.h as LED_PB0_NUM)
+Main Board Status: PD1   (Configured in config.h as LED_PD1_NUM)
 ```
 
-### AS5600 Hall Sensors (I2C)
+**Note**: The schematic shows these signals routed through MCU pins to external connectors:
+- RGB_OUT1-4 signals connect to external RGB strips via CN2-CN5 connectors
+- On-board RGB LED is directly connected to MCU PD1 pin
+
+### Hall Sensor I2C Interfaces  
+Each channel has dedicated I2C lines as defined in config.h:
 ```
-Channel 0: SCL=PB15, SDA=PD0
-Channel 1: SCL=PB14, SDA=PC15
-Channel 2: SCL=PB13, SDA=PC14
-Channel 3: SCL=PB12, SDA=PC13
+Channel 0: SCL=PB15, SDA=PD0  (AS5600_SCL_PINS[0], AS5600_SDA_PINS[0])
+Channel 1: SCL=PB14, SDA=PC15 (AS5600_SCL_PINS[1], AS5600_SDA_PINS[1])
+Channel 2: SCL=PB13, SDA=PC14 (AS5600_SCL_PINS[2], AS5600_SDA_PINS[2])
+Channel 3: SCL=PB12, SDA=PC13 (AS5600_SCL_PINS[3], AS5600_SDA_PINS[3])
+```
+All I2C lines have 10kΩ pull-up resistors (RN1, RN2, RN3) as shown in schematics.
+
+### ADC Inputs (Pressure Sensors)
+Analog inputs for filament detection are mapped to MCU ADC channels:
+```
+Channel Pull Sensors:   ADC inputs via K_PULL1-4 signals
+Channel Online Sensors: ADC inputs via K_ONLINE1-4 signals
+```
+**Voltage Thresholds** (from config.h):
+- High pressure (filament inserted): >1.85V (PULL_VOLTAGE_HIGH)
+- Low pressure (filament removed): <1.45V (PULL_VOLTAGE_LOW)
+
+### Motor Control (PWM H-Bridge)
+Each channel has bidirectional motor control routed through H-bridge drivers:
+```
+Motor 1: High/Low side control → U8 driver → CN2.9/CN2.10
+Motor 2: High/Low side control → U9 driver → CN3.9/CN3.10  
+Motor 3: High/Low side control → U10 driver → CN4.9/CN4.10
+Motor 4: High/Low side control → U11 driver → CN5.9/CN5.10
+```
+**Current Sensing**: 680mΩ resistors (R3-R6) provide overcurrent protection and load feedback.
+
+### Communication Interfaces
+```
+BambuBus (USART1 via RS485):
+  - Protocol: RS485 differential signaling  
+  - Baud Rate: Per BambuBus specification (typically 1,228,800 bps)
+  - Hardware: U7 transceiver with automatic direction control
+  - Protection: 120Ω termination, 10Ω series resistors, ESD diode
+  - Connector: 4-pin through-hole (CN1) with 24V power and RS485 A/B
+
+Debug Interface (USART2/USART3):
+  - Baud Rate: 115200 (DEBUG_UART_BAUDRATE in config.h)
+  - Purpose: Debug logging and development communication
+  - Access: Via programming headers H1/H2
 ```
 
-### ADC Inputs
+### Programming and Debug Interface
 ```
-ADC Channel 0: Channel 3 Pull Sensor
-ADC Channel 1: Channel 3 Online Key Sensor
-ADC Channel 2: Channel 2 Pull Sensor
-ADC Channel 3: Channel 2 Online Key Sensor
-ADC Channel 4: Channel 1 Pull Sensor
-ADC Channel 5: Channel 1 Online Key Sensor
-ADC Channel 6: Channel 0 Pull Sensor
-ADC Channel 7: Channel 0 Online Key Sensor
+SWD Programming:
+  - SWCLK: U2.37 (MCU pin 37) → H2.2
+  - SWIO: U2.34 (MCU pin 34) → H2.1
+  - 3.3V: H1.3, H2.3
+  - GND: H1.4, H2.4
+
+Reset Circuit:
+  - NRST: U2.7 (MCU pin 7) → SW1, C6, RN3.4
+  - BOOT0: U2.44 (MCU pin 44) → SW2, RN3.1  
+  - BOOT1: U2.20 (MCU pin 20) → RN3.2
 ```
 
-### Motor Control (PWM)
-Motor control pins are configured in the Motion_control module. Each channel has dedicated PWM outputs for forward/reverse operation.
-
-### Communication
+### Power Distribution
 ```
-USART1: BambuBus Protocol Communication
-USART2: Debug/Programming (115200 baud)
+24V Input: CN1.1 → L1, U1 → Voltage regulation
+3.3V Rails: Multiple distribution points with decoupling
+GND: Star ground configuration with multiple connection points
 ```
 
 ## Component Specifications
@@ -66,8 +198,9 @@ USART2: Debug/Programming (115200 baud)
 - 12-bit resolution (4096 positions per revolution)
 - Contactless magnetic sensing
 - I2C interface (address 0x36)
-- 3.3V or 5V operation
+- 3.3V operation (as shown in schematics)
 - Response time: <1ms
+- Supply current: ~10mA per sensor
 
 **Installation**:
 - Mount sensor PCB near rotating magnet
@@ -79,104 +212,280 @@ USART2: Debug/Programming (115200 baud)
   - Inconsistent magnet polarity will cause motor direction detection errors
   - Mark magnets during assembly to ensure consistent orientation
 
-### Pressure Sensors
+### Pressure Sensors (ITR9606 Optical)
 
-**Purpose**: Filament insertion/removal detection
+**Purpose**: Filament insertion/removal detection  
 
-**Type**: Analog pressure sensors or micro-switches
-**Interface**: ADC input (0-3.3V)
-**Thresholds**:
-- High pressure (filament inserted): >1.85V
-- Low pressure (filament removed): <1.45V
-- Hysteresis prevents false triggering
+**Type**: ITR9606 optical interrupt sensors (through-hole package)
+**Interface**: Analog output via optical coupling
+**Drive Circuit**: 
+- LED current: 470Ω limiting resistors (3.3V supply)
+- Pull-up resistors: 1kΩ on sensor outputs
+- Signal conditioning via dedicated amplifier/comparator ICs
+
+**Operating Characteristics**:
+- Supply voltage: 3.3V 
+- Detection range: Optimized for filament presence
+- Response time: <1ms typical
+- Output: Digital signal levels compatible with MCU ADC
 
 ### RGB LEDs (NeoPixel Compatible)
 
 **Purpose**: Visual status indication
 
-**Specifications**:
-- WS2812B or compatible addressable RGB LEDs
-- 5V power supply required
-- Data transmission: 800kHz
+**Main Board LED**:
+- Package: 5050RGBC (5.0×5.0mm, 4-pin)
+- Type: WS2812B or compatible addressable RGB LED
+- Supply: 3.3V logic, 5V power (if external power used)
+- Control: Single data line from MCU pin U2.6
+
+**Channel LEDs** (External):
+- Interface: PWM control via RGB_OUT1-4 signals
+- Drive capability: Determined by external driver circuits
 - 24-bit color depth (8 bits per channel)
+- Data transmission: 800kHz NeoPixel protocol
 
 **LED Configuration**:
-- 2 LEDs per filament channel (configurable)
-- 1 LED for main board status
-- Total: 9 LEDs default configuration
+- Up to 2 LEDs per filament channel (configurable in firmware)
+- 1 LED for main board status indication
+- Total: 9 LEDs in default configuration
+
+### Motor Drivers
+
+**Driver ICs**: 4× H-bridge motor drivers in ESOP-8 packages (U8-U11)
+
+**Specifications**:
+- Supply voltage: 24V motor supply, 3.3V logic
+- Current sensing: 680mΩ sense resistors for overcurrent protection
+- Control: PWM H-bridge control (High/Low side switching)
+- Protection: Current limiting, thermal protection
+- Output filtering: 100nF capacitors on each motor output
+
+**Control Interface**:
+- Direction control: H-bridge high/low side control
+- Speed control: PWM frequency and duty cycle
+- Current feedback: Via sense resistors for load monitoring
+
+### Power Supply Circuit
+
+**Input**: 24V via 4-pin connector (CN1)
+- Connector: Through-hole, 3.0mm pitch (CONN-TH_4P-P3.00)
+- Protection: SMB diode (D1) for reverse polarity protection
+- Filtering: 22µF input capacitors (C2, C3, C4)
+
+**Regulation**: 
+- Primary regulator: SOT-23-6 package (U1) 
+- Input: 24V, Output: 3.3V
+- Inductor: 10µH switching regulator inductor (L1)
+- Output filtering: Multiple 100nF and 22µF capacitors
+
+**Distribution**:
+- 3.3V: MCU, sensors, logic circuits, LED control
+- 24V: Motor drivers, input to voltage regulator
+- Current capacity: Designed for ~2A motor loads plus control circuits
+
+### Communication Interface
+
+**RS485 Transceiver**: SOP-8 package (U7)
+- Standard: RS485 differential signaling
+- Termination: 120Ω termination resistor (R9)
+- Line protection: 10Ω series resistors (R7, R8)
+- ESD protection: SOT-23-3 TVS diode (D2)
+- Direction control: Automatic via RTS signal from MCU
+
+**External Connector**: 4-pin through-hole connector (CN1)
+- Pin 1: 24V power
+- Pin 2: RS485_B (differential pair)  
+- Pin 3: GND
+- Pin 4: RS485_A (differential pair)
 
 ## Power Requirements
 
-### Supply Voltage
-- **MCU Core**: 3.3V (internal regulator from 5V)
-- **RGB LEDs**: 5V (high current capability required)
-- **Sensors**: 3.3V (provided by MCU regulator)
-- **Motors**: Variable (typically 12V-24V)
+### Supply Voltages
+- **Primary Input**: 24V DC via CN1 connector (recommended 1-2A capacity)
+- **MCU and Logic**: 3.3V regulated (via on-board switching regulator U1)
+- **Motor Supply**: 24V direct (with current sensing and protection)
+- **Sensor Supply**: 3.3V regulated for all sensors and interfaces
 
-### Current Consumption
-- **MCU**: ~50mA @ 144MHz
-- **RGB LEDs**: ~20mA per LED per color channel (max 60mA per LED)
-- **Sensors**: ~10mA total for all AS5600 sensors
-- **Motors**: Variable depending on load
+### Current Consumption Estimates
+- **MCU Core**: ~50mA @ 144MHz (CH32V203C8T6)
+- **Motor Drivers**: Variable, typically 100-2000mA per channel under load
+- **Hall Sensors**: ~10mA total for all 4 AS5600 sensors
+- **Optical Sensors**: ~20mA total (ITR9606 LED drive current)
+- **RGB LEDs**: ~20mA per color channel (60mA max per LED when all colors active)
+- **Support Circuits**: ~30mA (regulators, communication, etc.)
+
+### Power Supply Circuit Details
+
+**Input Protection**:
+- Reverse polarity protection via SMB diode (D1)
+- Input filtering with 22µF capacitors (C2, C3, C4)
+- 24V distribution to motor drivers with 100nF decoupling (C13-C16)
+
+**3.3V Regulation**:
+- Switching regulator topology with 10µH inductor (L1)
+- Output filtering and decoupling throughout board
+- Multiple 100nF capacitors (C5-C12) for digital circuits
+- Separate 47pF capacitors (C1) for crystal oscillator
+
+**Current Sensing**:
+- 680mΩ sense resistors (R3-R6) for motor current monitoring
+- Enables overcurrent protection and load feedback
+- Precision sensing for motor control algorithms
+
+### Power Distribution Strategy
+- **Star ground configuration** minimizes ground loops
+- **Separate analog and digital supplies** where applicable  
+- **Dedicated motor supply rails** with filtering
+- **Multiple decoupling capacitors** placed close to ICs
+- **Wide traces** for power distribution (>0.5mm for 24V, >0.3mm for 3.3V)
 
 ### Power Supply Recommendations
-- **5V Rail**: Minimum 2A capacity for RGB LEDs
-- **Motor Supply**: Appropriate for stepper motors (typically 1-2A per channel)
-- **Clean Power**: Use bypass capacitors near MCU and sensors
+- **24V Input**: Switching power supply, 2-3A minimum capacity
+- **Ripple**: <100mV peak-to-peak on 24V rail  
+- **Regulation**: ±5% on input voltage acceptable
+- **Protection**: Input fusing recommended (3A fast-blow)
+- **Connector**: Secure screw terminals or high-current connector
+- **Wire gauge**: 18 AWG minimum for 24V input, 22 AWG for low-current signals
 
 ## PCB Layout Considerations
 
 ### Signal Integrity
-- Keep crystal oscillator traces short
-- Use ground plane under high-speed digital signals
-- Separate analog and digital ground sections
+- **Crystal oscillator**: 47pF load capacitors (C1) with short, symmetric traces
+- **High-speed digital signals**: Ground plane underneath for impedance control
+- **Differential pairs**: RS485 signals (A/B) routed as matched-length differential pairs
+- **I2C lines**: 10kΩ pull-up resistors (RN1, RN2, RN3) located close to connectors
+- **PWM signals**: Proper ground return paths for motor driver switching
 
 ### Power Distribution
-- Dedicate wide traces for power rails
-- Place bypass capacitors close to IC power pins
-- Use appropriate trace width for current capacity
+- **24V traces**: Wide traces (minimum 1.0mm) for motor current capacity
+- **3.3V distribution**: Star configuration from regulator output
+- **Ground plane**: Continuous ground plane with minimal splits
+- **Via stitching**: Multiple vias connecting ground layers
+- **Decoupling strategy**: 100nF capacitors within 5mm of each IC power pin
 
-### EMI/EMC
-- Keep switching circuits away from analog sensors
-- Use ferrite beads on motor power lines if needed
-- Shield sensitive analog circuits
+### Component Placement Strategy
+- **Voltage regulator (U1)**: Central location with thermal relief
+- **Motor drivers (U8-U11)**: Positioned near output connectors
+- **MCU (U2)**: Central location with decoupling capacitors nearby
+- **Connectors (CN1-CN5)**: Edge placement for external access
+- **Crystal**: Adjacent to MCU with minimal trace length
 
-## Mechanical Mounting
+### Thermal Management
+- **Motor drivers**: Thermal pads connected to ground plane for heat dissipation
+- **Voltage regulator**: Thermal via array underneath for heat transfer
+- **Current sense resistors**: 1210 package for power dissipation
+- **Component spacing**: Adequate spacing around heat-generating components
+
+### EMI/EMC Design
+- **Switching circuits**: Motor drivers isolated from sensitive analog circuits
+- **Power supply filtering**: Input filter capacitors and inductors
+- **Shield connections**: Ground plane connections for cable shields
+- **Clock signals**: Minimal trace length with proper termination
+
+## Mechanical Mounting and Assembly
+
+### PCB Mounting
+- **Mounting holes**: M2 screws (TP1, TP2, TP3) for mechanical support
+- **Board thickness**: Standard 1.6mm PCB thickness
+- **Copper weight**: 1oz minimum, 2oz recommended for power traces
+- **Solder mask**: Green solder mask with white silkscreen
+- **Surface finish**: HASL or ENIG for component soldering
+
+### Connector Specifications
+
+**Main Power/Communication Connector (CN1)**:
+- Type: 4-pin through-hole, 3.0mm pitch
+- Rating: 24V, 3A minimum
+- Pins: 24V, RS485_A, GND, RS485_B
+- Mating connector: Compatible screw terminal or Molex equivalent
+
+**Channel Connectors (CN2-CN5)**:
+- Type: 10-pin SMD, 2.0mm pitch
+- Signals: 3.3V, GND, I2C (SCL/SDA), ADC inputs, motor outputs, RGB control
+- Pin assignment per channel:
+  ```
+  Pin 1: K_PULL (ADC input)
+  Pin 2: K_ONLINE (ADC input)  
+  Pin 3: GND
+  Pin 4: RGB_OUT (PWM signal)
+  Pin 5: MCU_SCL (I2C clock)
+  Pin 6: MCU_SDA (I2C data)
+  Pin 7: GND
+  Pin 8: 3.3V
+  Pin 9: MOTOR_HOUT (High-side drive)
+  Pin 10: MOTOR_LOUT (Low-side drive)
+  ```
+
+**Programming Headers**:
+- H1: Debug UART (4-pin, 2.54mm pitch)
+- H2: SWD Programming (4-pin, 2.54mm pitch)
+- Standard 0.1" header compatible with common programming adapters
 
 ### AS5600 Sensor Mounting
-- Sensors must be precisely aligned with rotating magnets
-- Use mounting brackets to maintain consistent air gap
-- Protect sensors from contamination and physical damage
-- **Ensure consistent magnet polarity orientation across all channels**
+- **Precise alignment required**: Sensors must be aligned with rotating magnets
+- **Air gap tolerance**: 0.5-3.0mm (optimal ~1.5mm)
+- **Mounting bracket design**: Rigid mounting to prevent vibration
+- **Cable management**: Flexible ribbon or individual wires to main board
+- **Environmental protection**: Consider dust/debris protection
 
 ### Magnet Assembly Guidelines
+
 **Critical for Motor Direction Detection:**
 
-1. **Polarity Marking**: Mark all magnets during manufacturing to indicate pole orientation
-2. **Consistent Installation**: Install all magnets with the same pole (North or South) facing the AS5600 sensor
-3. **Verification Procedure**: Use a compass or magnetic field detector to verify polarity before final assembly
-4. **Quality Control**: Include magnet polarity check in assembly verification steps
+1. **Magnet Selection**:
+   - Diametrically magnetized (not axially magnetized)
+   - Neodymium N35 or stronger recommended
+   - Diameter: 6-8mm typical for gear assembly
+   - Thickness: 2-4mm for optimal field strength
 
-**Magnet Specifications:**
-- Diametrically magnetized (not axially magnetized)
-- Neodymium N35 or stronger recommended  
-- Diameter appropriate for gear assembly
-- Thickness 2-4mm for optimal field strength
+2. **Installation Procedure**:
+   - **Polarity marking**: Mark all magnets during manufacturing
+   - **Consistent orientation**: Install all magnets with same pole facing sensor
+   - **Verification**: Use compass or magnetic field detector before assembly
+   - **Documentation**: Record magnet orientation in assembly records
 
-**Assembly Notes:**
-- Random magnet orientation will cause motor direction detection errors
-- Inconsistent polarity is a primary cause of channels 1, 2, and 3 direction reversal
-- Proper magnet installation reduces need for software direction corrections
+3. **Quality Control**:
+   - Include magnet polarity check in assembly verification
+   - Test rotation direction on each channel before final assembly
+   - **Note**: Inconsistent polarity is primary cause of direction reversal issues
 
-### LED Placement
-- Channel LEDs should be visible from front panel
-- Main board LED indicates overall system status
-- Consider light diffusion for even illumination
+### Cable and Wiring
 
-### Heat Management
-- Ensure adequate ventilation around motor drivers
-- Consider heat sinks for high-power components
-- Monitor component temperatures during operation
+**Internal Wiring**:
+- **I2C cables**: Twisted pair or ribbon cable with ground return
+- **Motor cables**: 18-20 AWG for motor power, shielded if high frequency
+- **Power cables**: 16-18 AWG for 24V distribution
+- **Signal cables**: 22-24 AWG for low-current signals
+
+**External Connections**:
+- **BambuBus cable**: Shielded twisted pair for RS485 communication
+- **Power input**: 16 AWG minimum with appropriate connector rating
+- **Strain relief**: All external cables should have strain relief
+
+### Assembly Sequence
+
+1. **PCB Assembly**:
+   - Surface mount components first (reflow soldering)
+   - Through-hole components (wave soldering or hand assembly)
+   - Programming header installation
+   - Initial electrical test
+
+2. **Mechanical Assembly**:
+   - Install in enclosure with proper mounting
+   - Connect external cables with strain relief
+   - Install sensor boards with alignment fixtures
+
+3. **System Integration**:
+   - Connect to motor assemblies with marked magnet polarity
+   - Program firmware with hardware-specific configuration
+   - Perform functional testing on all channels
+
+4. **Final Testing**:
+   - Power supply test (all voltage rails)
+   - Communication test (BambuBus protocol)
+   - Motor direction test (automatic learning or manual verification)
+   - Sensor calibration and range testing
 
 ## Configuration Options
 
@@ -251,11 +560,21 @@ The firmware now automatically learns correct motor direction during normal fila
 - ✅ **Addresses root cause** - Compensates for inconsistent magnet polarity during assembly
 
 #### Configuration
-Enable in `config.h`:
+Automatic direction learning is enabled by default in config.h:
 ```c
 #define AUTO_DIRECTION_LEARNING_ENABLED    true     // Enable automatic learning (recommended)
 #define AUTO_DIRECTION_MIN_SAMPLES         3        // Samples needed for confidence
 #define AUTO_DIRECTION_MIN_MOVEMENT_MM     2.0f     // Minimum movement per sample
+#define AUTO_DIRECTION_TIMEOUT_MS          5000     // Timeout for learning attempt
+#define AUTO_DIRECTION_CONFIDENCE_THRESHOLD 0.7f    // Minimum confidence ratio required
+```
+
+**Legacy Fallback Configuration** (used when automatic learning fails):
+```c
+#define MOTOR_DIR_CORRECTION_CH0   false     // Channel 0 correction
+#define MOTOR_DIR_CORRECTION_CH1   true      // Channel 1 correction  
+#define MOTOR_DIR_CORRECTION_CH2   true      // Channel 2 correction
+#define MOTOR_DIR_CORRECTION_CH3   false     // Channel 3 correction
 ```
 
 #### Assembly Impact
