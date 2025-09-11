@@ -15,6 +15,8 @@ Firmware-specific documentation including APIs, protocols, and development guide
 ### 📁 `hardware/`
 Hardware-related documentation:
 - **HARDWARE.md** - Hardware specifications, pinouts, and configuration
+- **SCH_Schematic1_2025-09-11.pdf** - Complete official PCB schematic (364KB)
+- **SCH_Schematic1_1_2025-09-11.pdf** - Official PCB schematic sheet 1 (136KB)
 
 ### 📁 `assembly/`
 Physical assembly and packaging documentation:
@@ -33,6 +35,7 @@ Development and programming tools:
 | **Getting Started** | [firmware/DEV-BUILD-QUICK-START.md](firmware/DEV-BUILD-QUICK-START.md) | Quick development setup |
 | **API Reference** | [firmware/API.md](firmware/API.md) | Complete API documentation |
 | **Hardware Setup** | [hardware/HARDWARE.md](hardware/HARDWARE.md) | Hardware configuration |
+| **PCB Schematics** | [hardware/SCH_Schematic1_2025-09-11.pdf](hardware/SCH_Schematic1_2025-09-11.pdf) | Official electrical schematics |
 | **Assembly Guide** | [assembly/BMU370C Assembly Instructions.pdf](assembly/BMU370C%20Assembly%20Instructions.pdf) | Physical assembly |
 | **CI/CD Pipeline** | [firmware/CI-CD.md](firmware/CI-CD.md) | Build automation |
 
