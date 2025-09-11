@@ -6,6 +6,21 @@ This guide provides detailed information about the hardware setup and configurat
 
 The BMCU370 is built around the CH32V203C8T6 microcontroller, a RISC-V based MCU designed for embedded applications.
 
+## Official Schematics
+
+**📋 Latest PCB Schematics (September 11, 2025):**
+- **[SCH_Schematic1_2025-09-11.pdf](SCH_Schematic1_2025-09-11.pdf)** - Complete schematic (364KB)
+- **[SCH_Schematic1_1_2025-09-11.pdf](SCH_Schematic1_1_2025-09-11.pdf)** - Schematic sheet 1 (136KB)
+
+These are the official electrical schematics for the BMCU370 PCB. Use these as the authoritative reference for:
+- **Electrical connections** and signal routing
+- **Component values** and part numbers
+- **Power distribution** and voltage rails
+- **Connector pinouts** and interface specifications
+- **Test points** and debugging interfaces
+
+**📌 Important**: Always refer to these schematics for electrical design verification, troubleshooting, and any hardware modifications.
+
 ## Microcontroller Specifications
 
 - **CPU**: RISC-V 32-bit core @ 144MHz
@@ -17,6 +32,8 @@ The BMCU370 is built around the CH32V203C8T6 microcontroller, a RISC-V based MCU
 - **ADC**: 12-bit, 10 channels with DMA support
 
 ## Pin Assignment
+
+**⚠️ Always verify pin assignments against the [official schematics](#official-schematics) for the most accurate and up-to-date information.**
 
 ### RGB LED Outputs
 ```
@@ -57,6 +74,8 @@ USART2: Debug/Programming (115200 baud)
 ```
 
 ## Component Specifications
+
+**📋 For complete component specifications, part numbers, and electrical characteristics, refer to the [official schematics](#official-schematics).**
 
 ### AS5600 Hall Sensors
 
@@ -125,6 +144,8 @@ USART2: Debug/Programming (115200 baud)
 - **Clean Power**: Use bypass capacitors near MCU and sensors
 
 ## PCB Layout Considerations
+
+**📋 Refer to the [official schematics](#official-schematics) for detailed layout requirements and component placement guidelines.**
 
 ### Signal Integrity
 - Keep crystal oscillator traces short
@@ -207,6 +228,14 @@ The firmware supports multiple hardware configurations through `config.h`:
 
 ## Testing and Validation
 
+### Schematic Verification
+
+Before hardware testing, always verify connections against the [official schematics](#official-schematics):
+1. **Pin assignments** - Confirm MCU pin mapping matches schematic
+2. **Power rails** - Verify voltage levels and current paths
+3. **Signal routing** - Check for proper signal integrity and impedance
+4. **Component placement** - Ensure components match schematic designators
+
 ### Initial Hardware Test
 1. **Power-on Test**: Verify all voltage rails
 2. **LED Test**: Check each RGB LED individually
@@ -270,6 +299,8 @@ With automatic direction detection enabled:
 For detailed information, see [AUTOMATIC_DIRECTION_DETECTION.md](AUTOMATIC_DIRECTION_DETECTION.md).
 
 ### Troubleshooting Common Issues
+
+**💡 For electrical troubleshooting, always consult the [official schematics](#official-schematics) to verify connections and component values.**
 
 #### LEDs Not Working
 - Check 5V power supply voltage and current capacity

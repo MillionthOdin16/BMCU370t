@@ -31,6 +31,7 @@ The BMCU370 is a sophisticated multi-material 3D printing controller designed fo
 - **Actuators**: 4-channel PWM motor control
 - **Indicators**: RGB LED strips (NeoPixel compatible)
 - **ADC**: 8-channel DMA-enabled analog input
+- **Schematics**: Official PCB schematics available in [`docs/hardware/`](docs/hardware/)
 
 ## Resources
 
@@ -91,6 +92,11 @@ src/
 ├── many_soft_AS5600.cpp/h # Hall sensor interface
 ├── Adafruit_NeoPixel.cpp/h # RGB LED control library
 └── time64.cpp/h         # 64-bit timestamp utilities
+
+docs/hardware/
+├── HARDWARE.md          # Hardware configuration guide
+├── SCH_Schematic1_2025-09-11.pdf # Complete PCB schematic
+└── SCH_Schematic1_1_2025-09-11.pdf # PCB schematic sheet 1
 ```
 
 ## Dev Builds
@@ -132,6 +138,8 @@ Key hardware parameters are defined in `main.h`:
 - **LED_PB1_NUM**: Number of LEDs on channel PB1 (default: 2)
 - **LED_PB0_NUM**: Number of LEDs on channel PB0 (default: 2)
 - **LED_PD1_NUM**: Main board status LED count (default: 1)
+
+📋 **For detailed pin assignments and electrical specifications, see the [Hardware Guide](docs/hardware/HARDWARE.md) and [PCB schematics](docs/hardware/).**
 
 ### Filament Settings
 
