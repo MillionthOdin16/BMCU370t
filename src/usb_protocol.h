@@ -97,6 +97,13 @@ void usb_protocol_get_stats(uint32_t* rx_count, uint32_t* tx_count, uint32_t* er
 void usb_protocol_reset(void);
 
 /**
+ * Trigger DFU mode for firmware updates
+ * Sets magic value and resets system to bootloader
+ * Preserves firmware update capability
+ */
+void usb_protocol_enter_dfu_mode(void);
+
+/**
  * Enable/disable automatic status reports
  * @param enable true to enable periodic status reports, false to disable
  * @param interval_ms Interval between status reports (only used if enable=true)

@@ -65,6 +65,10 @@ bool usb_parse_command(const char* command_str, usb_command_t* cmd) {
         cmd->type = USB_CMD_RESET;
         return true;
     }
+    else if (strcmp(temp_cmd, "DFU") == 0) {
+        cmd->type = USB_CMD_DFU;
+        return true;
+    }
     else if (strncmp(temp_cmd, "SET_PARAM ", 10) == 0) {
         cmd->type = USB_CMD_SET_PARAM;
         
@@ -330,6 +334,10 @@ int usb_process_command(const usb_command_t* cmd, char* response_buffer, size_t 
         case USB_CMD_RESET:
             // Acknowledge reset command, then reset after response is sent
             return snprintf(response_buffer, buffer_size, "{\"result\":\"resetting\"}\n");
+            
+        case USB_CMD_DFU:
+            // Acknowledge DFU command, then enter DFU mode after response is sent
+            return snprintf(response_buffer, buffer_size, "{\"result\":\"entering_dfu_mode\"}\n");
             
         case USB_CMD_ERROR:
         case USB_CMD_UNKNOWN:

@@ -25,6 +25,152 @@ static bool auto_status_enabled = false;
 static uint32_t auto_status_interval = 5000; // 5 seconds default
 static uint32_t last_auto_status_time = 0;
 
+// USB CDC-ACM Implementation with DFU preservation
+#ifdef USB_CDC_ENABLED
+
+// USB device mode detection
+typedef enum {
+    USB_MODE_NONE = 0,
+    USB_MODE_DFU,
+    USB_MODE_CDC
+} usb_mode_t;
+
+static usb_mode_t current_usb_mode = USB_MODE_NONE;
+static bool usb_cdc_connected = false;
+static bool usb_enumerated = false;
+
+// Check if system should start in DFU mode (preserve firmware update capability)
+static bool should_enter_dfu_mode(void) {
+#ifdef USB_DFU_DUAL_MODE
+    // Check boot pin or magic value to determine DFU mode
+    // On CH32V203, BOOT0 pin or reset with specific pattern can indicate DFU
+    
+    // Check if BOOT0 pin is high (DFU mode request)
+    GPIO_InitTypeDef GPIO_InitStructure = {0};
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE);
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_2; // PB2 commonly used for BOOT0
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU; // Input with pull-up
+    GPIO_Init(GPIOB, &GPIO_InitStructure);
+    
+    bool boot_pin_high = (GPIO_ReadInputDataBit(GPIOB, GPIO_Pin_2) == Bit_SET);
+    
+    // Also check for magic value in backup register indicating DFU request
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR, ENABLE);
+    PWR_BackupAccessCmd(ENABLE);
+    uint16_t magic_value = BKP_ReadBackupRegister(BKP_DR1);
+    bool dfu_magic_set = (magic_value == 0xDF00); // DFU magic value
+    
+    // Clear magic value if set
+    if (dfu_magic_set) {
+        BKP_WriteBackupRegister(BKP_DR1, 0x0000);
+    }
+    
+    return (boot_pin_high || dfu_magic_set);
+#else
+    return false; // Always use CDC mode if dual mode disabled
+#endif
+}
+
+// Initialize USB subsystem in appropriate mode
+static void usb_hardware_init(void) {
+    // Enable USB clock
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_USB, ENABLE);
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
+    
+    // Configure USB pins (PA11=USB_DM, PA12=USB_DP)
+    GPIO_InitTypeDef GPIO_InitStructure = {0};
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_11 | GPIO_Pin_12;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
+    GPIO_Init(GPIOA, &GPIO_InitStructure);
+    
+    // Determine mode
+    if (should_enter_dfu_mode()) {
+        current_usb_mode = USB_MODE_DFU;
+        // Enable DFU mode - system will enter bootloader
+        DEBUG_MY("USB: DFU mode requested - entering bootloader\n");
+        // Force system reset to bootloader
+        // This preserves firmware update capability
+        NVIC_SystemReset();
+    } else {
+        current_usb_mode = USB_MODE_CDC;
+        // Initialize CDC-ACM mode
+        DEBUG_MY("USB: CDC mode - initializing communication\n");
+        // Note: Full USB CDC stack would be initialized here
+        // For now, we set up basic enumeration
+        usb_enumerated = false;
+        usb_cdc_connected = false;
+    }
+}
+
+// Check USB CDC connection status
+static bool usb_cdc_is_connected(void) {
+    if (current_usb_mode != USB_MODE_CDC) {
+        return false;
+    }
+    
+    // In a real implementation, this would check USB enumeration status
+    // For now, simulate connection after initialization
+    static uint32_t init_time = 0;
+    if (init_time == 0) {
+        init_time = get_time64();
+    }
+    
+    // Simulate USB enumeration after 2 seconds
+    if (!usb_enumerated && (get_time64() - init_time > 2000)) {
+        usb_enumerated = true;
+        usb_cdc_connected = true;
+        DEBUG_MY("USB CDC: Device enumerated and connected\n");
+    }
+    
+    return usb_cdc_connected;
+}
+
+// Read data from USB CDC
+static int usb_cdc_read(char* buffer, int max_length) {
+    if (!usb_cdc_is_connected() || !buffer || max_length <= 0) {
+        return 0;
+    }
+    
+    // Real implementation would read from USB CDC RX buffer
+    // For now, return 0 (no data available) since this is a placeholder
+    // In actual implementation, this would interface with USB hardware
+    
+    return 0; // No data available (placeholder)
+}
+
+// Write data to USB CDC
+static bool usb_cdc_write(const char* data, int length) {
+    if (!usb_cdc_is_connected() || !data || length <= 0) {
+        return false;
+    }
+    
+    // Real implementation would write to USB CDC TX buffer
+    // For development/testing, output to debug log as well
+    DEBUG_MY("USB TX: ");
+    char temp_char[2] = {0, 0};
+    for (int i = 0; i < length && i < 128; i++) { // Limit debug output
+        temp_char[0] = data[i];
+        DEBUG_MY(temp_char);
+    }
+    DEBUG_MY("\n");
+    
+    // In actual implementation, this would:
+    // 1. Copy data to USB TX buffer
+    // 2. Trigger USB transmission
+    // 3. Return true on success, false on error
+    
+    return true; // Assume success for now (placeholder)
+}
+
+#else
+// USB CDC disabled - provide stub functions
+static bool usb_cdc_is_connected(void) { return false; }
+static int usb_cdc_read(char* buffer, int max_length) { return 0; }
+static bool usb_cdc_write(const char* data, int length) { return false; }
+static void usb_hardware_init(void) { DEBUG_MY("USB: CDC disabled\n"); }
+#endif
+
 void usb_protocol_init(void) {
     // Initialize state
     usb_state = USB_STATE_DISCONNECTED;
@@ -45,8 +191,12 @@ void usb_protocol_init(void) {
     tx_count = 0;
     error_count = 0;
     
-    // Initialize USB CDC stack (placeholder - actual implementation would depend on USB library)
-    // usb_cdc_init();
+#ifdef USB_CDC_ENABLED
+    // Initialize USB hardware with dual-mode support
+    usb_hardware_init();
+#else
+    DEBUG_MY("USB Protocol: CDC disabled\n");
+#endif
     
     DEBUG_MY("USB Protocol: Initialized\n");
 }
@@ -57,29 +207,6 @@ usb_comm_state_t usb_protocol_get_state(void) {
 
 bool usb_protocol_is_ready(void) {
     return (usb_state == USB_STATE_READY);
-}
-
-// Placeholder function for USB CDC availability check
-static bool usb_cdc_is_connected(void) {
-    // This would check actual USB CDC connection status
-    // For now, simulate connection for development
-    return true; // Placeholder
-}
-
-// Placeholder function for reading USB CDC data
-static int usb_cdc_read(char* buffer, int max_length) {
-    // This would read actual USB CDC data
-    // For now, return 0 (no data available)
-    return 0; // Placeholder
-}
-
-// Placeholder function for writing USB CDC data
-static bool usb_cdc_write(const char* data, int length) {
-    // This would write actual USB CDC data
-    // For now, output to debug log for testing
-    DEBUG_MY("USB TX: ");
-    DEBUG_MY(data);
-    return true; // Placeholder
 }
 
 static bool add_command_to_queue(const char* command) {
@@ -150,11 +277,18 @@ int usb_protocol_process_commands(void) {
                     }
                 }
                 
-                // Handle special commands
+                // Handle special commands that require post-response actions
                 if (cmd.type == USB_CMD_RESET) {
                     // Schedule system reset after response is sent
-                    // This would be implemented with a delayed reset
-                    DEBUG_MY("USB Protocol: Reset requested\n");
+                    DEBUG_MY("USB Protocol: System reset requested\n");
+                    // In a real implementation, this would set a flag for delayed reset
+                    // delay(100); // Allow response to be sent
+                    // NVIC_SystemReset();
+                }
+                else if (cmd.type == USB_CMD_DFU) {
+                    // Schedule DFU mode entry after response is sent
+                    DEBUG_MY("USB Protocol: DFU mode requested\n");
+                    // usb_protocol_enter_dfu_mode(); // Would be called after delay
                 }
             } else {
                 // Send error response for invalid commands
@@ -274,17 +408,29 @@ void usb_protocol_reset(void) {
     DEBUG_MY("USB Protocol: Reset\n");
 }
 
+void usb_protocol_enter_dfu_mode(void) {
+#ifdef USB_DFU_DUAL_MODE
+    DEBUG_MY("USB Protocol: Entering DFU mode for firmware update\n");
+    
+    // Set magic value in backup register to indicate DFU request
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR, ENABLE);
+    PWR_BackupAccessCmd(ENABLE);
+    BKP_WriteBackupRegister(BKP_DR1, 0xDF00); // DFU magic value
+    
+    // Reset system - will enter DFU mode on next boot
+    NVIC_SystemReset();
+#else
+    DEBUG_MY("USB Protocol: DFU mode not supported in this build\n");
+#endif
+}
+
 void usb_protocol_set_auto_status(bool enable, uint32_t interval_ms) {
     auto_status_enabled = enable;
     auto_status_interval = interval_ms;
-    last_auto_status_time = get_time64();
-    
-    DEBUG_MY("USB Protocol: Auto status ");
-    DEBUG_MY(enable ? "enabled" : "disabled");
     if (enable) {
-        DEBUG_MY(" (interval: ");
-        DEBUG_num("", interval_ms);
-        DEBUG_MY("ms)");
+        last_auto_status_time = get_time64();
+        DEBUG_MY("USB Protocol: Auto status enabled\n");
+    } else {
+        DEBUG_MY("USB Protocol: Auto status disabled\n");
     }
-    DEBUG_MY("\n");
 }

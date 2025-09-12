@@ -30,6 +30,7 @@ typedef enum {
     USB_CMD_SET_PARAM,      ///< Set configuration parameter
     USB_CMD_GET_VERSION,    ///< Request version information
     USB_CMD_RESET,          ///< Software reset request
+    USB_CMD_DFU,            ///< Enter DFU mode for firmware updates
     USB_CMD_ERROR           ///< Command parsing error
 } usb_command_type_t;
 
