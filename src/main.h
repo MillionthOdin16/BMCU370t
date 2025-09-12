@@ -2,6 +2,7 @@
 #include "ch32v20x.h"
 #include <Arduino.h>
 #include "stdlib.h"
+#include "config.h"
 #include "Debug_log.h"
 #include "Flash_saves.h"
 #include "Motion_control.h"
@@ -9,6 +10,8 @@
 #include "time64.h"
 #include "many_soft_AS5600.h"
 #include "ADC_DMA.h"
+#include "usb_protocol.h"
+#include "usb_status_api.h"
 
 #define delay_any_us(time)                                                 \
     {                                                                      \
