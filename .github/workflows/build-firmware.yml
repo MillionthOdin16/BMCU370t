@@ -170,30 +170,30 @@ jobs:
         pio run --environment esp32s3 --target size >> ../firmware-artifacts/esp32/build_info.txt
         
         # Create flash instructions
-        cat > ../firmware-artifacts/esp32/FLASH_INSTRUCTIONS.txt << 'EOF'
-ESP32-S3 Firmware Flash Instructions
-====================================
-
-Prerequisites:
-- ESP32-S3 development board with USB-OTG capability
-- esptool.py installed: pip install esptool
-
-Flash Command:
-esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 write_flash -z \
-  0x0000 esp32_bootloader.bin \
-  0x8000 esp32_partitions.bin \
-  0x10000 esp32_firmware.bin \
-  0x110000 esp32_littlefs.bin
-
-Alternative (firmware only):
-esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 write_flash -z 0x10000 esp32_firmware.bin
-
-Notes:
-- Replace /dev/ttyUSB0 with your actual ESP32 port
-- On Windows, use COM ports (e.g., COM3)
-- Hold BOOT button while connecting USB for flash mode
-- Web interface available at http://esp32-bmcu370.local after setup
-EOF
+        {
+          echo "ESP32-S3 Firmware Flash Instructions"
+          echo "===================================="
+          echo ""
+          echo "Prerequisites:"
+          echo "- ESP32-S3 development board with USB-OTG capability"
+          echo "- esptool.py installed: pip install esptool"
+          echo ""
+          echo "Flash Command:"
+          echo "esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 write_flash -z \\"
+          echo "  0x0000 esp32_bootloader.bin \\"
+          echo "  0x8000 esp32_partitions.bin \\"
+          echo "  0x10000 esp32_firmware.bin \\"
+          echo "  0x110000 esp32_littlefs.bin"
+          echo ""
+          echo "Alternative (firmware only):"
+          echo "esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 write_flash -z 0x10000 esp32_firmware.bin"
+          echo ""
+          echo "Notes:"
+          echo "- Replace /dev/ttyUSB0 with your actual ESP32 port"
+          echo "- On Windows, use COM ports (e.g., COM3)"
+          echo "- Hold BOOT button while connecting USB for flash mode"
+          echo "- Web interface available at http://esp32-bmcu370.local after setup"
+        } > ../firmware-artifacts/esp32/FLASH_INSTRUCTIONS.txt
         
     - name: Upload ESP32 firmware artifacts
       uses: actions/upload-artifact@v4
@@ -226,65 +226,65 @@ EOF
         
     - name: Create release documentation
       run: |
-        cat > release-package/README.md << 'EOF'
-# BMCU370 USB-ESP Interface Firmware Package
-        
-This package contains the complete firmware for the BMCU370 USB-ESP interface system.
-
-## Package Contents
-
-### BMCU370 Firmware (bmcu370/)
-- `bmcu370_firmware.bin` - Main firmware binary for DFU flashing
-- `bmcu370_firmware.hex` - Intel HEX format for programming tools
-- `bmcu370_firmware.elf` - ELF format with debug symbols
-- `build_info.txt` - Build information and memory usage
-
-### ESP32 Firmware (esp32/)
-- `esp32_firmware.bin` - Main ESP32-S3 application firmware
-- `esp32_bootloader.bin` - ESP32 bootloader
-- `esp32_partitions.bin` - Partition table
-- `esp32_littlefs.bin` - Web interface filesystem
-- `build_info.txt` - Build information and memory usage
-- `FLASH_INSTRUCTIONS.txt` - Detailed flashing instructions
-
-## Quick Start
-
-### 1. Flash BMCU370 Firmware
-Use DFU mode to flash the BMCU370:
-```bash
-# Enter DFU mode (hold BOOT button during power-on)
-dfu-util -a 0 -D bmcu370/bmcu370_firmware.bin
-```
-
-### 2. Flash ESP32 Firmware
-Flash the ESP32-S3 with all components:
-```bash
-esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 write_flash -z \
-  0x0000 esp32/esp32_bootloader.bin \
-  0x8000 esp32/esp32_partitions.bin \
-  0x10000 esp32/esp32_firmware.bin \
-  0x110000 esp32/esp32_littlefs.bin
-```
-
-### 3. Setup and Access
-1. Connect BMCU370 to ESP32 via USB-C
-2. Power on ESP32 - it will create WiFi AP "BMCU370-Setup"
-3. Connect to AP (password: bmcu370setup)
-4. Configure WiFi at http://192.168.4.1
-5. Access web interface at http://esp32-bmcu370.local
-
-## Features
-- **BMCU370**: USB CDC communication, JSON status API, DFU firmware updates
-- **ESP32**: USB host, web server, WiFi management, historical data, OTA updates
-- **Web Interface**: Real-time monitoring, configuration, diagnostics, firmware updates
-
-## System Architecture
-```
-[Bambu Printer] ←RS485→ [BMCU370] ←USB-C→ [ESP32-S3] ←WiFi→ [Web Browser]
-```
-
-For detailed documentation, see the project repository.
-EOF
+        {
+          echo "# BMCU370 USB-ESP Interface Firmware Package"
+          echo ""        
+          echo "This package contains the complete firmware for the BMCU370 USB-ESP interface system."
+          echo ""
+          echo "## Package Contents"
+          echo ""
+          echo "### BMCU370 Firmware (bmcu370/)"
+          echo "- \`bmcu370_firmware.bin\` - Main firmware binary for DFU flashing"
+          echo "- \`bmcu370_firmware.hex\` - Intel HEX format for programming tools"
+          echo "- \`bmcu370_firmware.elf\` - ELF format with debug symbols"
+          echo "- \`build_info.txt\` - Build information and memory usage"
+          echo ""
+          echo "### ESP32 Firmware (esp32/)"
+          echo "- \`esp32_firmware.bin\` - Main ESP32-S3 application firmware"
+          echo "- \`esp32_bootloader.bin\` - ESP32 bootloader"
+          echo "- \`esp32_partitions.bin\` - Partition table"
+          echo "- \`esp32_littlefs.bin\` - Web interface filesystem"
+          echo "- \`build_info.txt\` - Build information and memory usage"
+          echo "- \`FLASH_INSTRUCTIONS.txt\` - Detailed flashing instructions"
+          echo ""
+          echo "## Quick Start"
+          echo ""
+          echo "### 1. Flash BMCU370 Firmware"
+          echo "Use DFU mode to flash the BMCU370:"
+          echo "\`\`\`bash"
+          echo "# Enter DFU mode (hold BOOT button during power-on)"
+          echo "dfu-util -a 0 -D bmcu370/bmcu370_firmware.bin"
+          echo "\`\`\`"
+          echo ""
+          echo "### 2. Flash ESP32 Firmware"
+          echo "Flash the ESP32-S3 with all components:"
+          echo "\`\`\`bash"
+          echo "esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 write_flash -z \\"
+          echo "  0x0000 esp32/esp32_bootloader.bin \\"
+          echo "  0x8000 esp32/esp32_partitions.bin \\"
+          echo "  0x10000 esp32/esp32_firmware.bin \\"
+          echo "  0x110000 esp32/esp32_littlefs.bin"
+          echo "\`\`\`"
+          echo ""
+          echo "### 3. Setup and Access"
+          echo "1. Connect BMCU370 to ESP32 via USB-C"
+          echo "2. Power on ESP32 - it will create WiFi AP \"BMCU370-Setup\""
+          echo "3. Connect to AP (password: bmcu370setup)"
+          echo "4. Configure WiFi at http://192.168.4.1"
+          echo "5. Access web interface at http://esp32-bmcu370.local"
+          echo ""
+          echo "## Features"
+          echo "- **BMCU370**: USB CDC communication, JSON status API, DFU firmware updates"
+          echo "- **ESP32**: USB host, web server, WiFi management, historical data, OTA updates"
+          echo "- **Web Interface**: Real-time monitoring, configuration, diagnostics, firmware updates"
+          echo ""
+          echo "## System Architecture"
+          echo "\`\`\`"
+          echo "[Bambu Printer] ←RS485→ [BMCU370] ←USB-C→ [ESP32-S3] ←WiFi→ [Web Browser]"
+          echo "\`\`\`"
+          echo ""
+          echo "For detailed documentation, see the project repository."
+        } > release-package/README.md
 
         # Create version info
         echo "Build Information" > release-package/VERSION.txt
