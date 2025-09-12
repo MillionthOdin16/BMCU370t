@@ -404,20 +404,20 @@ bool BMCU370_Interface::parseJsonResponse(const String& response, JsonDocument& 
 
 bool BMCU370_Interface::validateStatusResponse(const JsonDocument& doc) {
     // Check for required top-level objects
-    if (!doc.containsKey("system") || !doc.containsKey("channels")) {
+    if (!doc["system"].is<JsonObject>() || !doc["channels"].is<JsonArray>()) {
         ESP_LOGE(TAG, "Status response missing required fields");
         return false;
     }
     
     // Validate system object
-    JsonObject system = doc["system"];
-    if (!system.containsKey("uptime") || !system.containsKey("version")) {
+    JsonObjectConst system = doc["system"].as<JsonObjectConst>();
+    if (!system["uptime"].is<int>() || !system["version"].is<const char*>()) {
         ESP_LOGE(TAG, "System object missing required fields");
         return false;
     }
     
     // Validate channels array
-    JsonArray channels = doc["channels"];
+    JsonArrayConst channels = doc["channels"].as<JsonArrayConst>();
     if (channels.size() == 0 || channels.size() > MAX_FILAMENT_CHANNELS) {
         ESP_LOGE(TAG, "Invalid number of channels: %d", channels.size());
         return false;
@@ -428,7 +428,7 @@ bool BMCU370_Interface::validateStatusResponse(const JsonDocument& doc) {
 
 bool BMCU370_Interface::validateConfigResponse(const JsonDocument& doc) {
     // Check for config object
-    if (!doc.containsKey("config")) {
+    if (!doc["config"].is<JsonObject>()) {
         ESP_LOGE(TAG, "Config response missing config object");
         return false;
     }

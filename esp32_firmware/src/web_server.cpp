@@ -1,14 +1,17 @@
 #include "web_server.h"
 #include "wifi_manager.h"
+#include "historical_data.h"
+#include "ota_manager.h"
 #include <esp_log.h>
 
 static const char* TAG = "WebServer";
 
-// External WiFi manager reference
+// External references
 extern WiFiManager wifi_manager;
+extern OTAManager ota_manager;
 
 WebServerManager::WebServerManager() 
-    : server(WEB_SERVER_PORT), websocket("/ws"), bmcu_interface(nullptr),
+    : server(WEB_SERVER_PORT), websocket("/ws"), bmcu_interface(nullptr), history_manager(nullptr),
       last_websocket_update(0), api_request_count(0), 
       websocket_message_count(0), error_count(0) {
     
@@ -21,13 +24,14 @@ WebServerManager::WebServerManager()
 WebServerManager::~WebServerManager() {
 }
 
-bool WebServerManager::init(BMCU370_Interface* interface) {
+bool WebServerManager::init(BMCU370_Interface* interface, HistoricalDataManager* history) {
     if (!interface) {
         ESP_LOGE(TAG, "BMCU370 interface is null");
         return false;
     }
     
     bmcu_interface = interface;
+    history_manager = history;
     
     ESP_LOGI(TAG, "Initializing web server on port %d", WEB_SERVER_PORT);
     
@@ -89,6 +93,26 @@ void WebServerManager::setupRoutes() {
     server.on("/api/wifi/connect", HTTP_POST, [this](AsyncWebServerRequest* request) {
         this->handleWiFiConnect(request);
     });
+    
+    // Historical data endpoints
+    server.on("/api/history", HTTP_GET, [this](AsyncWebServerRequest* request) {
+        this->handleGetHistoricalData(request);
+    });
+    
+    server.on("/api/history/summary", HTTP_GET, [this](AsyncWebServerRequest* request) {
+        this->handleGetDataSummary(request);
+    });
+    
+    server.on("/api/history/trends", HTTP_GET, [this](AsyncWebServerRequest* request) {
+        this->handleGetTrendAnalysis(request);
+    });
+    
+    server.on("/api/history/clear", HTTP_POST, [this](AsyncWebServerRequest* request) {
+        this->handleClearHistory(request);
+    });
+    
+    // Setup OTA web handlers
+    ota_manager.setupWebHandlers(&server);
     
     // Default route for SPA
     server.onNotFound([](AsyncWebServerRequest* request) {
@@ -232,7 +256,7 @@ void WebServerManager::handleGetLogs(AsyncWebServerRequest* request) {
     
     // Create a simple log response
     JsonDocument logs;
-    logs["esp32_logs"] = JsonArray();
+    logs["esp32_logs"].to<JsonArray>();
     logs["bmcu370_interface"]["command_count"] = bmcu_interface ? bmcu_interface->getCommandCount() : 0;
     logs["bmcu370_interface"]["error_count"] = bmcu_interface ? bmcu_interface->getErrorCount() : 0;
     logs["bmcu370_interface"]["last_error"] = bmcu_interface ? bmcu_interface->getLastError() : "N/A";
@@ -441,4 +465,86 @@ void WebServerManager::printServerInfo() {
     ESP_LOGI(TAG, "Errors: %lu", error_count);
     ESP_LOGI(TAG, "Connected WebSocket Clients: %d", websocket.count());
     ESP_LOGI(TAG, "==============================");
+}
+
+// Historical data handlers
+void WebServerManager::handleGetHistoricalData(AsyncWebServerRequest* request) {
+    logRequest(request, "/api/history");
+    
+    if (!history_manager) {
+        request->send(503, "application/json", "{\"error\":\"Historical data not available\"}");
+        return;
+    }
+    
+    // Parse query parameters
+    int channel_id = -1;
+    int hours = 24;
+    
+    if (request->hasParam("channel")) {
+        channel_id = request->getParam("channel")->value().toInt();
+    }
+    
+    if (request->hasParam("hours")) {
+        hours = request->getParam("hours")->value().toInt();
+        if (hours < 1) hours = 1;
+        if (hours > 168) hours = 168; // Max 1 week
+    }
+    
+    JsonDocument doc = history_manager->getHistoricalData(channel_id, hours);
+    
+    String response;
+    serializeJson(doc, response);
+    request->send(200, "application/json", response);
+}
+
+void WebServerManager::handleGetDataSummary(AsyncWebServerRequest* request) {
+    logRequest(request, "/api/history/summary");
+    
+    if (!history_manager) {
+        request->send(503, "application/json", "{\"error\":\"Historical data not available\"}");
+        return;
+    }
+    
+    JsonDocument doc = history_manager->getDataSummary();
+    
+    String response;
+    serializeJson(doc, response);
+    request->send(200, "application/json", response);
+}
+
+void WebServerManager::handleGetTrendAnalysis(AsyncWebServerRequest* request) {
+    logRequest(request, "/api/history/trends");
+    
+    if (!history_manager) {
+        request->send(503, "application/json", "{\"error\":\"Historical data not available\"}");
+        return;
+    }
+    
+    JsonDocument doc = history_manager->getTrendAnalysis();
+    
+    String response;
+    serializeJson(doc, response);
+    request->send(200, "application/json", response);
+}
+
+void WebServerManager::handleClearHistory(AsyncWebServerRequest* request) {
+    logRequest(request, "/api/history/clear [POST]");
+    
+    if (!history_manager) {
+        request->send(503, "application/json", "{\"error\":\"Historical data not available\"}");
+        return;
+    }
+    
+    // Parse retention days parameter
+    int retention_days = 0; // 0 means clear all
+    
+    if (request->hasParam("retention_days", true)) {
+        retention_days = request->getParam("retention_days", true)->value().toInt();
+    }
+    
+    history_manager->clearOldData(retention_days);
+    history_manager->saveToFile();
+    
+    ESP_LOGI(TAG, "Historical data cleared (retention: %d days)", retention_days);
+    request->send(200, "application/json", "{\"status\":\"cleared\"}");
 }

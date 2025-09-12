@@ -7,22 +7,26 @@
 #include "bmcu370_interface.h"
 #include "web_server.h"
 #include "wifi_manager.h"
+#include "historical_data.h"
+#include "ota_manager.h"
 #include "config.h"
 
 // Global objects
 BMCU370_Interface bmcu_interface;
 WebServerManager web_server;
 WiFiManager wifi_manager;
+HistoricalDataManager history_manager;
 
 // System status
 unsigned long last_status_update = 0;
 unsigned long last_heartbeat = 0;
+unsigned long last_history_save = 0;
 bool system_ready = false;
 
 void setup() {
     Serial.begin(115200);
     Serial.println("\n=== ESP32 BMCU370 Web Interface ===");
-    Serial.println("Version: " BMCU370_INTERFACE_VERSION);
+    Serial.println("Version: " + String(BMCU370_INTERFACE_VERSION));
     
     // Initialize file system for web interface
     if (!LittleFS.begin(true)) {
@@ -39,6 +43,20 @@ void setup() {
         Serial.println("BMCU370 interface initialized");
     }
     
+    // Initialize historical data manager
+    if (!history_manager.init()) {
+        Serial.println("ERROR: Failed to initialize historical data manager");
+    } else {
+        Serial.println("Historical data manager initialized");
+    }
+    
+    // Initialize OTA manager
+    if (!ota_manager.init()) {
+        Serial.println("ERROR: Failed to initialize OTA manager");
+    } else {
+        Serial.println("OTA manager initialized");
+    }
+    
     // Initialize WiFi manager
     wifi_manager.init();
     
@@ -47,8 +65,11 @@ void setup() {
         Serial.println("WiFi connection failed, starting in AP mode");
     }
     
+    // Start OTA after WiFi is connected
+    ota_manager.begin();
+    
     // Initialize web server
-    web_server.init(&bmcu_interface);
+    web_server.init(&bmcu_interface, &history_manager);
     
     Serial.println("=== Initialization Complete ===");
     Serial.print("WiFi Status: ");
@@ -72,6 +93,9 @@ void loop() {
     // Handle WiFi manager
     wifi_manager.handle();
     
+    // Handle OTA updates
+    ota_manager.handle();
+    
     // Update BMCU370 status periodically
     if (system_ready && (current_time - last_status_update >= STATUS_UPDATE_INTERVAL_MS)) {
         bool connected = bmcu_interface.updateStatus();
@@ -79,7 +103,33 @@ void loop() {
             Serial.print("BMCU370 connection status changed: ");
             Serial.println(connected ? "CONNECTED" : "DISCONNECTED");
         }
+        
+        // Add data to historical tracking if connected
+        if (connected) {
+            JsonDocument status = bmcu_interface.getStatus();
+            if (status["channels"].is<JsonArray>()) {
+                JsonArrayConst channels = status["channels"].as<JsonArrayConst>();
+                int channel_id = 0;
+                for (JsonObjectConst channel : channels) {
+                    history_manager.addDataPoint(channel_id, channel);
+                    channel_id++;
+                }
+            }
+            
+            // Add system data
+            if (status["system"].is<JsonObject>()) {
+                JsonObjectConst system = status["system"].as<JsonObjectConst>();
+                history_manager.addSystemDataPoint(system);
+            }
+        }
+        
         last_status_update = current_time;
+    }
+    
+    // Save historical data periodically
+    if (current_time - last_history_save >= 300000) { // 5 minutes
+        history_manager.saveToFile();
+        last_history_save = current_time;
     }
     
     // Heartbeat

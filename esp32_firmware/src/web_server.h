@@ -9,11 +9,15 @@
 #include "config.h"
 #include "bmcu370_interface.h"
 
+// Forward declarations
+class HistoricalDataManager;
+
 class WebServerManager {
 private:
     AsyncWebServer server;
     AsyncWebSocket websocket;
     BMCU370_Interface* bmcu_interface;
+    HistoricalDataManager* history_manager;
     
     // Rate limiting
     unsigned long last_api_call[WEBSOCKET_MAX_CLIENTS];
@@ -38,6 +42,12 @@ private:
     void handleWiFiScan(AsyncWebServerRequest* request);
     void handleWiFiConnect(AsyncWebServerRequest* request);
     
+    // Historical data handlers
+    void handleGetHistoricalData(AsyncWebServerRequest* request);
+    void handleGetDataSummary(AsyncWebServerRequest* request);
+    void handleGetTrendAnalysis(AsyncWebServerRequest* request);
+    void handleClearHistory(AsyncWebServerRequest* request);
+    
     // WebSocket handlers
     void handleWebSocketEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, 
                             AwsEventType type, void* arg, uint8_t* data, size_t len);
@@ -54,7 +64,7 @@ public:
     ~WebServerManager();
     
     // Initialization and control
-    bool init(BMCU370_Interface* interface);
+    bool init(BMCU370_Interface* interface, HistoricalDataManager* history = nullptr);
     void handle();
     
     // Status information
