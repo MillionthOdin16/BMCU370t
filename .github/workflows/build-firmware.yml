@@ -1,0 +1,302 @@
+name: Build Firmware
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'esp32_firmware/**'
+      - 'platformio.ini'
+      - 'lib/**'
+      - '.github/workflows/build-firmware.yml'
+  push:
+    branches:
+      - main
+      - 'copilot/**'
+    paths:
+      - 'src/**'
+      - 'esp32_firmware/**'
+      - 'platformio.ini'
+      - 'lib/**'
+      - '.github/workflows/build-firmware.yml'
+
+jobs:
+  build-bmcu370:
+    runs-on: ubuntu-latest
+    name: Build BMCU370 Firmware
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Cache pip
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+          
+    - name: Cache PlatformIO
+      uses: actions/cache@v4
+      with:
+        path: ~/.platformio
+        key: ${{ runner.os }}-${{ hashFiles('**/lockfiles') }}
+        
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: Install PlatformIO
+      run: |
+        python -m pip install --upgrade pip
+        pip install --upgrade platformio
+        
+    - name: Build BMCU370 firmware
+      run: |
+        cd ${{ github.workspace }}
+        pio run --environment genericCH32V203C8T6
+        
+    - name: Prepare BMCU370 artifacts
+      run: |
+        mkdir -p firmware-artifacts/bmcu370
+        cp .pio/build/genericCH32V203C8T6/firmware.bin firmware-artifacts/bmcu370/bmcu370_firmware.bin
+        cp .pio/build/genericCH32V203C8T6/firmware.elf firmware-artifacts/bmcu370/bmcu370_firmware.elf
+        cp .pio/build/genericCH32V203C8T6/firmware.hex firmware-artifacts/bmcu370/bmcu370_firmware.hex
+        
+        # Create build info
+        echo "BMCU370 Firmware Build Information" > firmware-artifacts/bmcu370/build_info.txt
+        echo "====================================" >> firmware-artifacts/bmcu370/build_info.txt
+        echo "Build Date: $(date)" >> firmware-artifacts/bmcu370/build_info.txt
+        echo "Commit: ${{ github.sha }}" >> firmware-artifacts/bmcu370/build_info.txt
+        echo "Branch: ${{ github.ref_name }}" >> firmware-artifacts/bmcu370/build_info.txt
+        echo "" >> firmware-artifacts/bmcu370/build_info.txt
+        echo "Build Environment: genericCH32V203C8T6" >> firmware-artifacts/bmcu370/build_info.txt
+        echo "Platform: CH32V203" >> firmware-artifacts/bmcu370/build_info.txt
+        echo "Features: USB CDC-ACM, DFU, JSON Status API" >> firmware-artifacts/bmcu370/build_info.txt
+        
+        # Get memory usage
+        pio run --environment genericCH32V203C8T6 --target size >> firmware-artifacts/bmcu370/build_info.txt
+        
+    - name: Upload BMCU370 firmware artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: bmcu370-firmware-${{ github.sha }}
+        path: firmware-artifacts/bmcu370/
+        retention-days: 30
+
+  build-esp32:
+    runs-on: ubuntu-latest
+    name: Build ESP32 Firmware
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Cache pip
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+          
+    - name: Cache PlatformIO
+      uses: actions/cache@v4
+      with:
+        path: ~/.platformio
+        key: ${{ runner.os }}-${{ hashFiles('**/lockfiles') }}
+        
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: Install PlatformIO
+      run: |
+        python -m pip install --upgrade pip
+        pip install --upgrade platformio
+        
+    - name: Build ESP32 firmware
+      run: |
+        cd ${{ github.workspace }}/esp32_firmware
+        pio run --environment esp32s3
+        
+    - name: Build ESP32 filesystem
+      run: |
+        cd ${{ github.workspace }}/esp32_firmware
+        pio run --target buildfs --environment esp32s3
+        
+    - name: Prepare ESP32 artifacts
+      run: |
+        mkdir -p firmware-artifacts/esp32
+        cd esp32_firmware
+        
+        # Copy firmware files
+        cp .pio/build/esp32s3/firmware.bin ../firmware-artifacts/esp32/esp32_firmware.bin
+        cp .pio/build/esp32s3/firmware.elf ../firmware-artifacts/esp32/esp32_firmware.elf
+        
+        # Copy filesystem
+        if [ -f .pio/build/esp32s3/littlefs.bin ]; then
+          cp .pio/build/esp32s3/littlefs.bin ../firmware-artifacts/esp32/esp32_littlefs.bin
+        fi
+        
+        # Copy partition table
+        if [ -f .pio/build/esp32s3/partitions.bin ]; then
+          cp .pio/build/esp32s3/partitions.bin ../firmware-artifacts/esp32/esp32_partitions.bin
+        fi
+        
+        # Copy bootloader
+        if [ -f .pio/build/esp32s3/bootloader.bin ]; then
+          cp .pio/build/esp32s3/bootloader.bin ../firmware-artifacts/esp32/esp32_bootloader.bin
+        fi
+        
+        cd ..
+        
+        # Create build info
+        echo "ESP32 Firmware Build Information" > firmware-artifacts/esp32/build_info.txt
+        echo "=================================" >> firmware-artifacts/esp32/build_info.txt
+        echo "Build Date: $(date)" >> firmware-artifacts/esp32/build_info.txt
+        echo "Commit: ${{ github.sha }}" >> firmware-artifacts/esp32/build_info.txt
+        echo "Branch: ${{ github.ref_name }}" >> firmware-artifacts/esp32/build_info.txt
+        echo "" >> firmware-artifacts/esp32/build_info.txt
+        echo "Build Environment: esp32s3" >> firmware-artifacts/esp32/build_info.txt
+        echo "Platform: ESP32-S3" >> firmware-artifacts/esp32/build_info.txt
+        echo "Features: USB Host, Web Server, WiFi, OTA Updates, Historical Data" >> firmware-artifacts/esp32/build_info.txt
+        echo "" >> firmware-artifacts/esp32/build_info.txt
+        
+        # Get memory usage
+        cd esp32_firmware
+        pio run --environment esp32s3 --target size >> ../firmware-artifacts/esp32/build_info.txt
+        
+        # Create flash instructions
+        cat > ../firmware-artifacts/esp32/FLASH_INSTRUCTIONS.txt << 'EOF'
+ESP32-S3 Firmware Flash Instructions
+====================================
+
+Prerequisites:
+- ESP32-S3 development board with USB-OTG capability
+- esptool.py installed: pip install esptool
+
+Flash Command:
+esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 write_flash -z \
+  0x0000 esp32_bootloader.bin \
+  0x8000 esp32_partitions.bin \
+  0x10000 esp32_firmware.bin \
+  0x110000 esp32_littlefs.bin
+
+Alternative (firmware only):
+esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 write_flash -z 0x10000 esp32_firmware.bin
+
+Notes:
+- Replace /dev/ttyUSB0 with your actual ESP32 port
+- On Windows, use COM ports (e.g., COM3)
+- Hold BOOT button while connecting USB for flash mode
+- Web interface available at http://esp32-bmcu370.local after setup
+EOF
+        
+    - name: Upload ESP32 firmware artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: esp32-firmware-${{ github.sha }}
+        path: firmware-artifacts/esp32/
+        retention-days: 30
+        
+  create-release-package:
+    runs-on: ubuntu-latest
+    name: Create Combined Release Package
+    needs: [build-bmcu370, build-esp32]
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Download BMCU370 artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: bmcu370-firmware-${{ github.sha }}
+        path: release-package/bmcu370/
+        
+    - name: Download ESP32 artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: esp32-firmware-${{ github.sha }}
+        path: release-package/esp32/
+        
+    - name: Create release documentation
+      run: |
+        cat > release-package/README.md << 'EOF'
+# BMCU370 USB-ESP Interface Firmware Package
+        
+This package contains the complete firmware for the BMCU370 USB-ESP interface system.
+
+## Package Contents
+
+### BMCU370 Firmware (bmcu370/)
+- `bmcu370_firmware.bin` - Main firmware binary for DFU flashing
+- `bmcu370_firmware.hex` - Intel HEX format for programming tools
+- `bmcu370_firmware.elf` - ELF format with debug symbols
+- `build_info.txt` - Build information and memory usage
+
+### ESP32 Firmware (esp32/)
+- `esp32_firmware.bin` - Main ESP32-S3 application firmware
+- `esp32_bootloader.bin` - ESP32 bootloader
+- `esp32_partitions.bin` - Partition table
+- `esp32_littlefs.bin` - Web interface filesystem
+- `build_info.txt` - Build information and memory usage
+- `FLASH_INSTRUCTIONS.txt` - Detailed flashing instructions
+
+## Quick Start
+
+### 1. Flash BMCU370 Firmware
+Use DFU mode to flash the BMCU370:
+```bash
+# Enter DFU mode (hold BOOT button during power-on)
+dfu-util -a 0 -D bmcu370/bmcu370_firmware.bin
+```
+
+### 2. Flash ESP32 Firmware
+Flash the ESP32-S3 with all components:
+```bash
+esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 write_flash -z \
+  0x0000 esp32/esp32_bootloader.bin \
+  0x8000 esp32/esp32_partitions.bin \
+  0x10000 esp32/esp32_firmware.bin \
+  0x110000 esp32/esp32_littlefs.bin
+```
+
+### 3. Setup and Access
+1. Connect BMCU370 to ESP32 via USB-C
+2. Power on ESP32 - it will create WiFi AP "BMCU370-Setup"
+3. Connect to AP (password: bmcu370setup)
+4. Configure WiFi at http://192.168.4.1
+5. Access web interface at http://esp32-bmcu370.local
+
+## Features
+- **BMCU370**: USB CDC communication, JSON status API, DFU firmware updates
+- **ESP32**: USB host, web server, WiFi management, historical data, OTA updates
+- **Web Interface**: Real-time monitoring, configuration, diagnostics, firmware updates
+
+## System Architecture
+```
+[Bambu Printer] ←RS485→ [BMCU370] ←USB-C→ [ESP32-S3] ←WiFi→ [Web Browser]
+```
+
+For detailed documentation, see the project repository.
+EOF
+
+        # Create version info
+        echo "Build Information" > release-package/VERSION.txt
+        echo "=================" >> release-package/VERSION.txt
+        echo "Package Date: $(date)" >> release-package/VERSION.txt
+        echo "Commit: ${{ github.sha }}" >> release-package/VERSION.txt
+        echo "Branch: ${{ github.ref_name }}" >> release-package/VERSION.txt
+        echo "Repository: ${{ github.repository }}" >> release-package/VERSION.txt
+        
+    - name: Upload complete firmware package
+      uses: actions/upload-artifact@v4
+      with:
+        name: bmcu370-complete-firmware-${{ github.sha }}
+        path: release-package/
+        retention-days: 90

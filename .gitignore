@@ -1,2 +1,44 @@
-.pio
-.vscode
+# PlatformIO build directories
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+/tmp/
+
+# Build artifacts
+*.bin
+*.hex
+*.elf
+*.map
+firmware-artifacts/
+
+# Log files
+*.log
+
+# Backup files
+*.bak
+*.backup
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
