@@ -91,6 +91,11 @@ void setup()
     BambuBus_init();
     DEBUG_init();
     Motion_control_init();
+    
+    // Initialize USB interface
+    usb_status_api_init();
+    usb_protocol_init();
+    
     delay(1);
 }
 
@@ -228,5 +233,11 @@ void loop()
         {
             Motion_control_run(error);
         }
+        
+        // Run USB protocol processing
+        usb_protocol_run();
+        
+        // Update USB interface with current BambuBus status
+        usb_status_update_bambubus_status(stu);
     }
 }

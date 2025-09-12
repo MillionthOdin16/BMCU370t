@@ -10,6 +10,8 @@
 #include "many_soft_AS5600.h"
 #include "ADC_DMA.h"
 #include "config.h"
+#include "usb_status_api.h"
+#include "usb_protocol.h"
 
 /**
  * Microsecond delay using SysTick timer
