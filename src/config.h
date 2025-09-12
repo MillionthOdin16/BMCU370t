@@ -42,3 +42,28 @@
 #define USB_RX_BUFFER_SIZE              256
 #define USB_TX_BUFFER_SIZE              2048
 #define USB_COMMAND_QUEUE_SIZE          8
+
+// USB PIN CONFLICT RESOLUTION
+// IMPORTANT: PA11 is used for both USB_DM and Channel 0 RGB LEDs
+// When USB_CDC_ENABLED=1, Channel 0 RGB LEDs are automatically disabled
+// to prevent hardware conflicts. This reduces LED channels from 4 to 3.
+//
+// Configuration options:
+// USB_CDC_ENABLED=1, USB_LED_CONFLICT_RESOLUTION=1: USB enabled, Ch0 LEDs disabled  
+// USB_CDC_ENABLED=0: USB disabled, all 4 LED channels enabled
+//
+#ifndef USB_LED_CONFLICT_RESOLUTION
+#ifdef USB_CDC_ENABLED
+#define USB_LED_CONFLICT_RESOLUTION     1  // Enable conflict resolution when USB is enabled
+#else  
+#define USB_LED_CONFLICT_RESOLUTION     0  // No conflict resolution needed when USB disabled
+#endif
+#endif
+
+// Pin assignments for reference:
+// PA11: USB_DM (when USB enabled) OR Channel 0 RGB (when USB disabled)
+// PA12: USB_DP (when USB enabled) 
+// PA8:  Channel 1 RGB (always available)
+// PB1:  Channel 2 RGB (always available)  
+// PB0:  Channel 3 RGB (always available)
+// PD1:  Main board RGB (always available)

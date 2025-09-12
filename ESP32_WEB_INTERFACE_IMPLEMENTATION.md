@@ -17,16 +17,24 @@ This document outlines the complete implementation plan for adding an ESP32-base
 - Debug UART - 115200 baud debug logging
 - USB DFU - Firmware programming
 
+**⚠️ IMPORTANT: Pin Conflict Resolution**
+- PA11 is shared between USB_DM and Channel 0 RGB LEDs
+- **When USB is enabled**: Channel 0 LEDs are disabled (3 LED channels available)
+- **When USB is disabled**: All 4 LED channels are available
+- The system automatically handles this conflict via conditional compilation
+
 ## Architecture Overview
 
 ```
 [Bambu Lab Printer] ←RS485→ [BMCU370] ←USB-C→ [ESP32] ←WiFi→ [Web Browser]
                                ↓                    ↓
                           [Hall Sensors]      [Web Server]
-                          [RGB LEDs]          [REST API]
+                          [RGB LEDs]¹         [REST API]
                           [Motors]            [WebSocket]
                           [Flash Config]      [WiFi Portal]
 ```
+
+¹ *Note: Channel 0 RGB LEDs unavailable when USB mode is enabled*
 
 ## Implementation Phases
 

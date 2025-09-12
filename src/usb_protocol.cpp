@@ -73,16 +73,25 @@ static bool should_enter_dfu_mode(void) {
 
 // Initialize USB subsystem in appropriate mode
 static void usb_hardware_init(void) {
+    // CRITICAL: PIN CONFLICT RESOLUTION
+    // PA11 is shared between USB_DM and Channel 0 RGB LEDs
+    // This initialization takes control of PA11/PA12 for USB communication
+    // Channel 0 RGB functionality is disabled when USB is active
+    DEBUG_MY("USB: Initializing - PA11 will be used for USB_DM (Channel 0 LEDs disabled)\n");
+    
     // Enable USB clock
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_USB, ENABLE);
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
     
     // Configure USB pins (PA11=USB_DM, PA12=USB_DP)
+    // WARNING: This overrides any previous PA11 configuration (e.g., RGB LEDs)
     GPIO_InitTypeDef GPIO_InitStructure = {0};
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_11 | GPIO_Pin_12;
     GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
     GPIO_Init(GPIOA, &GPIO_InitStructure);
+    
+    DEBUG_MY("USB: PA11 (USB_DM) and PA12 (USB_DP) configured for USB communication\n");
     
     // Determine mode
     if (should_enter_dfu_mode()) {
@@ -96,6 +105,7 @@ static void usb_hardware_init(void) {
         current_usb_mode = USB_MODE_CDC;
         // Initialize CDC-ACM mode
         DEBUG_MY("USB: CDC mode - initializing communication\n");
+        DEBUG_MY("USB: Channel 0 RGB LEDs unavailable due to PA11 pin sharing\n");
         // Note: Full USB CDC stack would be initialized here
         // For now, we set up basic enumeration
         usb_enumerated = false;

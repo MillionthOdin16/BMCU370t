@@ -167,14 +167,23 @@ int usb_get_full_status(char* buffer, size_t buffer_size) {
     
     int pos = 0;
     
-    // Start JSON object
+    // Start JSON object - add USB/LED conflict status
     pos += snprintf(buffer + pos, buffer_size - pos,
         "{\"system\":{"
         "\"uptime\":%llu,"
         "\"version\":\"%02d.%02d.%02d.%02d\","
         "\"bambubus_status\":\"%s\","
         "\"device_type\":\"%s\","
-        "\"active_channel\":%d"
+        "\"active_channel\":%d,"
+#if defined(USB_CDC_ENABLED) && (USB_CDC_ENABLED == 1)
+        "\"usb_mode\":\"enabled\","
+        "\"led_channels\":3,"
+        "\"led_conflict\":\"channel_0_disabled_pa11_usb\""
+#else
+        "\"usb_mode\":\"disabled\","
+        "\"led_channels\":4,"
+        "\"led_conflict\":\"none\""
+#endif
         "},\"channels\":[",
         usb_get_uptime_ms(),
         AMS_FIRMWARE_VERSION_MAJOR, AMS_FIRMWARE_VERSION_MINOR,

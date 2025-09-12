@@ -13,13 +13,27 @@ extern void debug_send_run();
 #define LED_PB0_NUM 2
 #define LED_PD1_NUM 1
 
-// 通道RGB对象，strip_channel[Chx]，0~4为PA11/PA8/PB1/PB0
+// USB/LED PIN CONFLICT RESOLUTION:
+// When USB is enabled, PA11 conflicts with Channel 0 RGB LEDs
+// Channel 0 is disabled when USB_CDC_ENABLED to prevent hardware conflicts
+#if defined(USB_CDC_ENABLED) && (USB_CDC_ENABLED == 1)
+// USB Mode: Channel 0 (PA11) disabled due to USB_DM conflict  
+// Only 3 LED channels available: PA8, PB1, PB0
 Adafruit_NeoPixel strip_channel[4] = {
-    Adafruit_NeoPixel(LED_PA11_NUM, PA11, NEO_GRB + NEO_KHZ800),
-    Adafruit_NeoPixel(LED_PA8_NUM, PA8, NEO_GRB + NEO_KHZ800),
-    Adafruit_NeoPixel(LED_PB1_NUM, PB1, NEO_GRB + NEO_KHZ800),
-    Adafruit_NeoPixel(LED_PB0_NUM, PB0, NEO_GRB + NEO_KHZ800)
+    Adafruit_NeoPixel(0, -1, NEO_GRB + NEO_KHZ800),         // Ch0: DISABLED (PA11 used by USB)
+    Adafruit_NeoPixel(LED_PA8_NUM, PA8, NEO_GRB + NEO_KHZ800),   // Ch1: PA8
+    Adafruit_NeoPixel(LED_PB1_NUM, PB1, NEO_GRB + NEO_KHZ800),   // Ch2: PB1  
+    Adafruit_NeoPixel(LED_PB0_NUM, PB0, NEO_GRB + NEO_KHZ800)    // Ch3: PB0
 };
+#else
+// Non-USB Mode: All 4 LED channels available
+Adafruit_NeoPixel strip_channel[4] = {
+    Adafruit_NeoPixel(LED_PA11_NUM, PA11, NEO_GRB + NEO_KHZ800), // Ch0: PA11
+    Adafruit_NeoPixel(LED_PA8_NUM, PA8, NEO_GRB + NEO_KHZ800),   // Ch1: PA8
+    Adafruit_NeoPixel(LED_PB1_NUM, PB1, NEO_GRB + NEO_KHZ800),   // Ch2: PB1
+    Adafruit_NeoPixel(LED_PB0_NUM, PB0, NEO_GRB + NEO_KHZ800)    // Ch3: PB0
+};
+#endif
 // 主板 5050 RGB
 Adafruit_NeoPixel strip_PD1(LED_PD1_NUM, PD1, NEO_GRB + NEO_KHZ800);
 
@@ -27,26 +41,49 @@ void RGB_Set_Brightness() {
     // 亮度值 0-255
     // 主板亮度
     strip_PD1.setBrightness(35);
-    // 通道1 RGB
+    
+#if defined(USB_CDC_ENABLED) && (USB_CDC_ENABLED == 1)
+    // USB Mode: Channel 0 disabled due to PA11 conflict with USB_DM
+    // Skip channel 0 (strip_channel[0]) brightness setting
+    DEBUG_MY("RGB: USB mode - Channel 0 LEDs disabled (PA11 conflict)\n");
+#else
+    // 通道1 RGB (Channel 0)
     strip_channel[0].setBrightness(15);
-    // 通道2 RGB
+#endif
+    
+    // 通道2 RGB (Channel 1)
     strip_channel[1].setBrightness(15);
-    // 通道3 RGB
+    // 通道3 RGB (Channel 2)
     strip_channel[2].setBrightness(15);
-    // 通道4 RGB
+    // 通道4 RGB (Channel 3)
     strip_channel[3].setBrightness(15);
 }
 
 void RGB_init() {
     strip_PD1.begin();
+    
+#if defined(USB_CDC_ENABLED) && (USB_CDC_ENABLED == 1)
+    // USB Mode: Skip Channel 0 initialization (PA11 conflict)
+    DEBUG_MY("RGB: Initializing 3 channels (USB mode - Ch0 disabled)\n");
+#else
     strip_channel[0].begin();
+    DEBUG_MY("RGB: Initializing 4 channels (non-USB mode)\n");
+#endif
+    
     strip_channel[1].begin();
     strip_channel[2].begin();
     strip_channel[3].begin();
 }
+
 void RGB_show_data() {
     strip_PD1.show();
+    
+#if defined(USB_CDC_ENABLED) && (USB_CDC_ENABLED == 1)
+    // USB Mode: Skip Channel 0 show (PA11 conflict) 
+#else
     strip_channel[0].show();
+#endif
+    
     strip_channel[1].show();
     strip_channel[2].show();
     strip_channel[3].show();
@@ -98,6 +135,14 @@ void setup()
 
 void Set_MC_RGB(uint8_t channel, int num, uint8_t R, uint8_t G, uint8_t B)
 {
+#if defined(USB_CDC_ENABLED) && (USB_CDC_ENABLED == 1)
+    // USB Mode: Channel 0 disabled due to PA11 pin conflict with USB_DM
+    if (channel == 0) {
+        DEBUG_MY("RGB: Channel 0 RGB update ignored (USB mode - PA11 conflict)\n");
+        return; // Skip channel 0 to prevent hardware conflict
+    }
+#endif
+
     int set_colors[3] = {R, G, B};
     bool is_new_colors = false;
 
