@@ -62,7 +62,6 @@ jobs:
         mkdir -p firmware-artifacts/bmcu370
         cp .pio/build/genericCH32V203C8T6/firmware.bin firmware-artifacts/bmcu370/bmcu370_firmware.bin
         cp .pio/build/genericCH32V203C8T6/firmware.elf firmware-artifacts/bmcu370/bmcu370_firmware.elf
-        cp .pio/build/genericCH32V203C8T6/firmware.hex firmware-artifacts/bmcu370/bmcu370_firmware.hex
         
         # Create build info
         echo "BMCU370 Firmware Build Information" > firmware-artifacts/bmcu370/build_info.txt
@@ -235,7 +234,6 @@ jobs:
           echo ""
           echo "### BMCU370 Firmware (bmcu370/)"
           echo "- \`bmcu370_firmware.bin\` - Main firmware binary for DFU flashing"
-          echo "- \`bmcu370_firmware.hex\` - Intel HEX format for programming tools"
           echo "- \`bmcu370_firmware.elf\` - ELF format with debug symbols"
           echo "- \`build_info.txt\` - Build information and memory usage"
           echo ""
