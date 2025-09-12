@@ -1,0 +1,29 @@
+# ESP32 Build Artifacts
+.pio/
+.vscode/
+*.tmp
+*.bak
+
+# Build output
+build/
+dist/
+
+# Temporary files
+*.log
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+ehthumbs.db
+
+# IDE files
+*.code-workspace
+.vscode/settings.json
+
+# Environment variables
+.env

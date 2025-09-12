@@ -1,0 +1,649 @@
+class BMCU370WebInterface {
+    constructor() {
+        this.ws = null;
+        this.wsReconnectTimer = null;
+        this.isConnected = false;
+        this.currentTab = 'dashboard';
+        this.statusData = null;
+        this.configData = null;
+        
+        this.init();
+    }
+
+    init() {
+        this.setupEventListeners();
+        this.connectWebSocket();
+        this.loadInitialData();
+        this.startPeriodicUpdates();
+    }
+
+    setupEventListeners() {
+        // Tab navigation
+        document.querySelectorAll('.tab-button').forEach(button => {
+            button.addEventListener('click', (e) => {
+                this.switchTab(e.target.dataset.tab);
+            });
+        });
+
+        // Configuration controls
+        this.setupConfigurationControls();
+        
+        // Diagnostic controls
+        this.setupDiagnosticControls();
+        
+        // Network controls
+        this.setupNetworkControls();
+
+        // Toast close
+        document.getElementById('toastClose').addEventListener('click', () => {
+            this.hideToast();
+        });
+    }
+
+    setupConfigurationControls() {
+        // LED brightness sliders
+        const mainLedSlider = document.getElementById('mainLedBrightness');
+        const channelLedSlider = document.getElementById('channelLedBrightness');
+        
+        mainLedSlider.addEventListener('input', (e) => {
+            document.getElementById('mainLedBrightnessValue').textContent = e.target.value;
+        });
+        
+        channelLedSlider.addEventListener('input', (e) => {
+            document.getElementById('channelLedBrightnessValue').textContent = e.target.value;
+        });
+
+        // Save configuration
+        document.getElementById('saveConfig').addEventListener('click', () => {
+            this.saveConfiguration();
+        });
+
+        // Reset configuration
+        document.getElementById('resetConfig').addEventListener('click', () => {
+            this.resetConfiguration();
+        });
+    }
+
+    setupDiagnosticControls() {
+        document.getElementById('resetBmcu').addEventListener('click', () => {
+            this.confirmAction('Reset BMCU370?', () => this.systemControl('reset_bmcu370'));
+        });
+
+        document.getElementById('enterDfu').addEventListener('click', () => {
+            this.confirmAction('Enter DFU Mode? Device will disconnect.', () => this.systemControl('dfu_mode'));
+        });
+
+        document.getElementById('resetEsp32').addEventListener('click', () => {
+            this.confirmAction('Reset ESP32? This will restart the interface.', () => this.systemControl('reset_esp32'));
+        });
+
+        document.getElementById('refreshLogs').addEventListener('click', () => {
+            this.refreshLogs();
+        });
+    }
+
+    setupNetworkControls() {
+        document.getElementById('scanNetworks').addEventListener('click', () => {
+            this.scanWiFiNetworks();
+        });
+
+        document.getElementById('wifiForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.connectToWiFi();
+        });
+    }
+
+    switchTab(tabName) {
+        // Update tab buttons
+        document.querySelectorAll('.tab-button').forEach(button => {
+            button.classList.remove('active');
+        });
+        document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+
+        // Update tab content
+        document.querySelectorAll('.tab-content').forEach(content => {
+            content.classList.remove('active');
+        });
+        document.getElementById(tabName).classList.add('active');
+
+        this.currentTab = tabName;
+
+        // Load tab-specific data
+        if (tabName === 'diagnostics') {
+            this.refreshLogs();
+        } else if (tabName === 'network') {
+            this.updateNetworkStatus();
+        }
+    }
+
+    connectWebSocket() {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws`;
+        
+        this.ws = new WebSocket(wsUrl);
+        
+        this.ws.onopen = () => {
+            console.log('WebSocket connected');
+            this.updateConnectionStatus(true);
+            this.hideLoading();
+            
+            // Clear reconnect timer
+            if (this.wsReconnectTimer) {
+                clearTimeout(this.wsReconnectTimer);
+                this.wsReconnectTimer = null;
+            }
+        };
+        
+        this.ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                this.handleWebSocketMessage(data);
+            } catch (error) {
+                console.error('Error parsing WebSocket message:', error);
+            }
+        };
+        
+        this.ws.onclose = () => {
+            console.log('WebSocket disconnected');
+            this.updateConnectionStatus(false);
+            this.scheduleReconnect();
+        };
+        
+        this.ws.onerror = (error) => {
+            console.error('WebSocket error:', error);
+            this.updateConnectionStatus(false);
+        };
+    }
+
+    scheduleReconnect() {
+        if (this.wsReconnectTimer) return;
+        
+        this.wsReconnectTimer = setTimeout(() => {
+            console.log('Attempting to reconnect WebSocket...');
+            this.connectWebSocket();
+        }, 3000);
+    }
+
+    handleWebSocketMessage(data) {
+        if (data.error) {
+            this.showToast(data.error, 'error');
+            return;
+        }
+        
+        if (data.system) {
+            this.statusData = data;
+            this.updateDashboard();
+        }
+    }
+
+    updateConnectionStatus(connected) {
+        this.isConnected = connected;
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        
+        if (connected) {
+            statusDot.className = 'status-dot connected';
+            statusText.textContent = 'Connected';
+        } else {
+            statusDot.className = 'status-dot';
+            statusText.textContent = 'Disconnected';
+        }
+    }
+
+    async loadInitialData() {
+        this.showLoading();
+        
+        try {
+            // Load status
+            const statusResponse = await this.apiCall('/api/status');
+            if (statusResponse) {
+                this.statusData = statusResponse;
+                this.updateDashboard();
+            }
+            
+            // Load configuration
+            const configResponse = await this.apiCall('/api/config');
+            if (configResponse) {
+                this.configData = configResponse;
+                this.updateConfigurationUI();
+            }
+        } catch (error) {
+            console.error('Error loading initial data:', error);
+            this.showToast('Failed to load initial data', 'error');
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    async apiCall(endpoint, options = {}) {
+        try {
+            const response = await fetch(endpoint, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...options.headers
+                },
+                ...options
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            return await response.json();
+        } catch (error) {
+            console.error('API call failed:', error);
+            this.showToast(`API Error: ${error.message}`, 'error');
+            return null;
+        }
+    }
+
+    updateDashboard() {
+        if (!this.statusData) return;
+        
+        const { system, channels } = this.statusData;
+        
+        // Update system overview
+        document.getElementById('systemVersion').textContent = system.version || '--';
+        document.getElementById('systemUptime').textContent = this.formatUptime(system.uptime || 0);
+        document.getElementById('deviceType').textContent = system.device_type || '--';
+        
+        const bambuBusStatus = document.getElementById('bambuBusStatus');
+        bambuBusStatus.textContent = system.bambubus_status || '--';
+        bambuBusStatus.className = `status-badge ${system.bambubus_status === 'online' ? 'online' : 'offline'}`;
+        
+        // Update channels
+        this.updateChannelsDisplay(channels || []);
+    }
+
+    updateChannelsDisplay(channels) {
+        const channelsGrid = document.getElementById('channelsGrid');
+        const channelsDetail = document.getElementById('channelsDetail');
+        
+        // Clear existing content
+        channelsGrid.innerHTML = '';
+        channelsDetail.innerHTML = '';
+        
+        channels.forEach((channel, index) => {
+            // Create channel card
+            const card = this.createChannelCard(channel, index);
+            channelsGrid.appendChild(card);
+            
+            // Create channel detail
+            const detail = this.createChannelDetail(channel, index);
+            channelsDetail.appendChild(detail);
+        });
+    }
+
+    createChannelCard(channel, index) {
+        const div = document.createElement('div');
+        div.className = 'channel-card';
+        div.onclick = () => this.selectChannel(index);
+        
+        const isOnline = channel.filament && channel.filament.status === 'online';
+        
+        div.innerHTML = `
+            <div class="channel-header">
+                <span class="channel-id">Channel ${channel.id}</span>
+                <span class="channel-status ${isOnline ? 'online' : ''}"></span>
+            </div>
+            <div class="channel-info">
+                <div>${channel.filament ? channel.filament.name || 'Unknown' : 'No Filament'}</div>
+                <div style="font-size: 0.9em; color: #666;">
+                    ${channel.motion ? channel.motion.state || 'Unknown' : 'No Motion Data'}
+                </div>
+            </div>
+        `;
+        
+        return div;
+    }
+
+    createChannelDetail(channel, index) {
+        const div = document.createElement('div');
+        div.className = 'channel-detail';
+        div.id = `channel-${index}-detail`;
+        div.style.display = index === 0 ? 'block' : 'none';
+        
+        const filament = channel.filament || {};
+        const motion = channel.motion || {};
+        const rgb = channel.rgb || {};
+        const sensors = channel.sensors || {};
+        
+        div.innerHTML = `
+            <h4><i class="fas fa-info-circle"></i> Channel ${channel.id} Details</h4>
+            <div class="detail-grid">
+                <div class="detail-section">
+                    <h4><i class="fas fa-spool"></i> Filament</h4>
+                    <div class="info-item">
+                        <label>Status:</label>
+                        <span class="status-badge ${filament.status === 'online' ? 'online' : 'offline'}">
+                            ${filament.status || 'Unknown'}
+                        </span>
+                    </div>
+                    <div class="info-item">
+                        <label>Name:</label>
+                        <span>${filament.name || 'N/A'}</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Remaining:</label>
+                        <span>${filament.meters_remaining || 0} meters</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Temperature:</label>
+                        <span>${filament.temperature ? `${filament.temperature.min}-${filament.temperature.max}°C` : 'N/A'}</span>
+                    </div>
+                </div>
+                
+                <div class="detail-section">
+                    <h4><i class="fas fa-cogs"></i> Motion</h4>
+                    <div class="info-item">
+                        <label>State:</label>
+                        <span>${motion.state || 'Unknown'}</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Position:</label>
+                        <span>${motion.position || 0}</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Speed:</label>
+                        <span>${motion.speed || 0} units/s</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Pressure:</label>
+                        <span>${motion.pressure || 0}</span>
+                    </div>
+                </div>
+                
+                <div class="detail-section">
+                    <h4><i class="fas fa-lightbulb"></i> RGB LED</h4>
+                    <div class="info-item">
+                        <label>Brightness:</label>
+                        <span>${rgb.brightness || 0}</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Color:</label>
+                        <span style="display: inline-block; width: 20px; height: 20px; background: rgb(${rgb.current_color ? `${rgb.current_color.r}, ${rgb.current_color.g}, ${rgb.current_color.b}` : '128, 128, 128'}); border-radius: 3px; vertical-align: middle; margin-left: 10px;"></span>
+                    </div>
+                </div>
+                
+                <div class="detail-section">
+                    <h4><i class="fas fa-sensor"></i> Sensors</h4>
+                    <div class="info-item">
+                        <label>Hall Position:</label>
+                        <span>${sensors.hall_position || 0}</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Filament Present:</label>
+                        <span class="status-badge ${sensors.filament_present ? 'online' : 'offline'}">
+                            ${sensors.filament_present ? 'Yes' : 'No'}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        return div;
+    }
+
+    selectChannel(index) {
+        // Update channel card selection
+        document.querySelectorAll('.channel-card').forEach((card, i) => {
+            card.classList.toggle('active', i === index);
+        });
+        
+        // Show corresponding detail
+        document.querySelectorAll('.channel-detail').forEach((detail, i) => {
+            detail.style.display = i === index ? 'block' : 'none';
+        });
+    }
+
+    updateConfigurationUI() {
+        if (!this.configData || !this.configData.config) return;
+        
+        const config = this.configData.config;
+        
+        // Update LED brightness controls
+        if (config.led_brightness) {
+            if (config.led_brightness.main !== undefined) {
+                document.getElementById('mainLedBrightness').value = config.led_brightness.main;
+                document.getElementById('mainLedBrightnessValue').textContent = config.led_brightness.main;
+            }
+            if (config.led_brightness.channels !== undefined) {
+                document.getElementById('channelLedBrightness').value = config.led_brightness.channels;
+                document.getElementById('channelLedBrightnessValue').textContent = config.led_brightness.channels;
+            }
+        }
+        
+        // Update voltage thresholds
+        if (config.voltage_thresholds) {
+            if (config.voltage_thresholds.high !== undefined) {
+                document.getElementById('voltageHigh').value = config.voltage_thresholds.high;
+            }
+            if (config.voltage_thresholds.low !== undefined) {
+                document.getElementById('voltageLow').value = config.voltage_thresholds.low;
+            }
+        }
+        
+        // Update motion parameters
+        if (config.motion_params) {
+            if (config.motion_params.send_time !== undefined) {
+                document.getElementById('motionSendTime').value = config.motion_params.send_time;
+            }
+            if (config.motion_params.filter_k !== undefined) {
+                document.getElementById('motionFilterK').value = config.motion_params.filter_k;
+            }
+        }
+    }
+
+    async saveConfiguration() {
+        this.showLoading();
+        
+        const config = {
+            led_brightness_main: document.getElementById('mainLedBrightness').value,
+            led_brightness_channels: document.getElementById('channelLedBrightness').value,
+            voltage_high: document.getElementById('voltageHigh').value,
+            voltage_low: document.getElementById('voltageLow').value,
+            motion_send_time: document.getElementById('motionSendTime').value,
+            motion_filter_k: document.getElementById('motionFilterK').value
+        };
+        
+        let allSuccess = true;
+        
+        // Send each parameter individually
+        for (const [key, value] of Object.entries(config)) {
+            const formData = new FormData();
+            formData.append('key', key);
+            formData.append('value', value);
+            
+            const result = await this.apiCall('/api/config', {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (!result || !result.success) {
+                allSuccess = false;
+                break;
+            }
+        }
+        
+        this.hideLoading();
+        
+        if (allSuccess) {
+            this.showToast('Configuration saved successfully', 'success');
+        } else {
+            this.showToast('Failed to save some configuration parameters', 'error');
+        }
+    }
+
+    resetConfiguration() {
+        // Reset to default values
+        document.getElementById('mainLedBrightness').value = 35;
+        document.getElementById('mainLedBrightnessValue').textContent = 35;
+        document.getElementById('channelLedBrightness').value = 15;
+        document.getElementById('channelLedBrightnessValue').textContent = 15;
+        document.getElementById('voltageHigh').value = 1.85;
+        document.getElementById('voltageLow').value = 1.45;
+        document.getElementById('motionSendTime').value = 1200;
+        document.getElementById('motionFilterK').value = 100;
+        
+        this.showToast('Configuration reset to defaults', 'warning');
+    }
+
+    async systemControl(action) {
+        this.showLoading();
+        
+        const formData = new FormData();
+        formData.append('action', action);
+        
+        const result = await this.apiCall('/api/system', {
+            method: 'POST',
+            body: formData
+        });
+        
+        this.hideLoading();
+        
+        if (result && result.success) {
+            this.showToast(result.message || 'Command executed successfully', 'success');
+        } else {
+            this.showToast('Failed to execute command', 'error');
+        }
+    }
+
+    async refreshLogs() {
+        const result = await this.apiCall('/api/logs');
+        
+        if (result) {
+            this.updateDiagnosticsDisplay(result);
+        }
+    }
+
+    updateDiagnosticsDisplay(logs) {
+        // Update statistics
+        if (logs.bmcu370_interface) {
+            document.getElementById('totalCommands').textContent = logs.bmcu370_interface.command_count || 0;
+            document.getElementById('totalErrors').textContent = logs.bmcu370_interface.error_count || 0;
+        }
+        
+        if (logs.web_server) {
+            document.getElementById('webRequests').textContent = logs.web_server.request_count || 0;
+            document.getElementById('connectedClients').textContent = logs.web_server.connected_clients || 0;
+        }
+        
+        // Update log entries
+        const logContainer = document.getElementById('logContainer');
+        logContainer.innerHTML = '';
+        
+        if (logs.esp32_logs && logs.esp32_logs.length > 0) {
+            logs.esp32_logs.forEach(entry => {
+                const div = document.createElement('div');
+                div.className = 'log-entry';
+                div.textContent = entry;
+                logContainer.appendChild(div);
+            });
+        } else {
+            logContainer.innerHTML = '<div class="log-entry">No recent logs available</div>';
+        }
+    }
+
+    async scanWiFiNetworks() {
+        const result = await this.apiCall('/api/wifi/scan');
+        if (result) {
+            this.showToast('Network scan initiated', 'success');
+        }
+    }
+
+    async connectToWiFi() {
+        const ssid = document.getElementById('wifiSSIDInput').value;
+        const password = document.getElementById('wifiPasswordInput').value;
+        
+        if (!ssid) {
+            this.showToast('Please enter a network name', 'warning');
+            return;
+        }
+        
+        this.showLoading();
+        
+        const formData = new FormData();
+        formData.append('ssid', ssid);
+        formData.append('password', password);
+        
+        const result = await this.apiCall('/api/wifi/connect', {
+            method: 'POST',
+            body: formData
+        });
+        
+        this.hideLoading();
+        
+        if (result && result.success) {
+            this.showToast('WiFi connection successful', 'success');
+            document.getElementById('wifiForm').reset();
+        } else {
+            this.showToast('WiFi connection failed', 'error');
+        }
+    }
+
+    updateNetworkStatus() {
+        // This would be updated via WebSocket or periodic API calls
+        // For now, show placeholder data
+        document.getElementById('wifiStatus').textContent = 'Connected';
+        document.getElementById('wifiStatus').className = 'status-badge online';
+    }
+
+    confirmAction(message, callback) {
+        if (confirm(message)) {
+            callback();
+        }
+    }
+
+    formatUptime(seconds) {
+        const days = Math.floor(seconds / 86400);
+        const hours = Math.floor((seconds % 86400) / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        
+        if (days > 0) {
+            return `${days}d ${hours}h ${minutes}m`;
+        } else if (hours > 0) {
+            return `${hours}h ${minutes}m`;
+        } else {
+            return `${minutes}m`;
+        }
+    }
+
+    showLoading() {
+        document.getElementById('loadingOverlay').classList.add('show');
+    }
+
+    hideLoading() {
+        document.getElementById('loadingOverlay').classList.remove('show');
+    }
+
+    showToast(message, type = 'info') {
+        const toast = document.getElementById('toast');
+        const toastMessage = document.getElementById('toastMessage');
+        
+        toastMessage.textContent = message;
+        toast.className = `toast ${type} show`;
+        
+        // Auto-hide after 5 seconds
+        setTimeout(() => {
+            this.hideToast();
+        }, 5000);
+    }
+
+    hideToast() {
+        document.getElementById('toast').classList.remove('show');
+    }
+
+    startPeriodicUpdates() {
+        // Update diagnostics every 30 seconds when on diagnostics tab
+        setInterval(() => {
+            if (this.currentTab === 'diagnostics') {
+                this.refreshLogs();
+            }
+        }, 30000);
+    }
+}
+
+// Initialize the application when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    window.bmcuInterface = new BMCU370WebInterface();
+});

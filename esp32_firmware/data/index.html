@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BMCU370 Web Interface</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1><i class="fas fa-microchip"></i> BMCU370 Interface</h1>
+            <div class="status-indicator" id="connectionStatus">
+                <span class="status-dot" id="statusDot"></span>
+                <span id="statusText">Connecting...</span>
+            </div>
+        </header>
+
+        <nav class="nav-tabs">
+            <button class="tab-button active" data-tab="dashboard">
+                <i class="fas fa-tachometer-alt"></i> Dashboard
+            </button>
+            <button class="tab-button" data-tab="configuration">
+                <i class="fas fa-cogs"></i> Configuration
+            </button>
+            <button class="tab-button" data-tab="diagnostics">
+                <i class="fas fa-chart-line"></i> Diagnostics
+            </button>
+            <button class="tab-button" data-tab="network">
+                <i class="fas fa-wifi"></i> Network
+            </button>
+        </nav>
+
+        <main class="main-content">
+            <!-- Dashboard Tab -->
+            <div class="tab-content active" id="dashboard">
+                <div class="dashboard-grid">
+                    <!-- System Overview -->
+                    <div class="card system-overview">
+                        <h3><i class="fas fa-info-circle"></i> System Overview</h3>
+                        <div class="system-info">
+                            <div class="info-item">
+                                <label>Version:</label>
+                                <span id="systemVersion">--</span>
+                            </div>
+                            <div class="info-item">
+                                <label>Uptime:</label>
+                                <span id="systemUptime">--</span>
+                            </div>
+                            <div class="info-item">
+                                <label>BambuBus Status:</label>
+                                <span id="bambuBusStatus" class="status-badge">--</span>
+                            </div>
+                            <div class="info-item">
+                                <label>Device Type:</label>
+                                <span id="deviceType">--</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Filament Channels -->
+                    <div class="card channels-overview">
+                        <h3><i class="fas fa-list"></i> Filament Channels</h3>
+                        <div class="channels-grid" id="channelsGrid">
+                            <!-- Channels will be populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Individual Channel Details -->
+                <div class="channels-detail" id="channelsDetail">
+                    <!-- Channel details will be populated dynamically -->
+                </div>
+            </div>
+
+            <!-- Configuration Tab -->
+            <div class="tab-content" id="configuration">
+                <div class="config-grid">
+                    <div class="card">
+                        <h3><i class="fas fa-lightbulb"></i> LED Configuration</h3>
+                        <div class="config-section">
+                            <div class="config-item">
+                                <label for="mainLedBrightness">Main LED Brightness:</label>
+                                <input type="range" id="mainLedBrightness" min="0" max="255" value="35">
+                                <span id="mainLedBrightnessValue">35</span>
+                            </div>
+                            <div class="config-item">
+                                <label for="channelLedBrightness">Channel LED Brightness:</label>
+                                <input type="range" id="channelLedBrightness" min="0" max="255" value="15">
+                                <span id="channelLedBrightnessValue">15</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h3><i class="fas fa-bolt"></i> Voltage Thresholds</h3>
+                        <div class="config-section">
+                            <div class="config-item">
+                                <label for="voltageHigh">High Threshold:</label>
+                                <input type="number" id="voltageHigh" step="0.01" min="1.0" max="3.0" value="1.85">
+                                <span>V</span>
+                            </div>
+                            <div class="config-item">
+                                <label for="voltageLow">Low Threshold:</label>
+                                <input type="number" id="voltageLow" step="0.01" min="1.0" max="3.0" value="1.45">
+                                <span>V</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h3><i class="fas fa-cogs"></i> Motion Parameters</h3>
+                        <div class="config-section">
+                            <div class="config-item">
+                                <label for="motionSendTime">Send Time:</label>
+                                <input type="number" id="motionSendTime" min="100" max="5000" value="1200">
+                                <span>ms</span>
+                            </div>
+                            <div class="config-item">
+                                <label for="motionFilterK">Filter K:</label>
+                                <input type="number" id="motionFilterK" min="1" max="1000" value="100">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="config-actions">
+                    <button class="btn btn-primary" id="saveConfig">
+                        <i class="fas fa-save"></i> Save Configuration
+                    </button>
+                    <button class="btn btn-secondary" id="resetConfig">
+                        <i class="fas fa-undo"></i> Reset to Defaults
+                    </button>
+                </div>
+            </div>
+
+            <!-- Diagnostics Tab -->
+            <div class="tab-content" id="diagnostics">
+                <div class="diagnostics-grid">
+                    <div class="card">
+                        <h3><i class="fas fa-chart-bar"></i> System Statistics</h3>
+                        <div class="stats-grid">
+                            <div class="stat-item">
+                                <div class="stat-value" id="totalCommands">0</div>
+                                <div class="stat-label">Commands Sent</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value" id="totalErrors">0</div>
+                                <div class="stat-label">Errors</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value" id="webRequests">0</div>
+                                <div class="stat-label">Web Requests</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value" id="connectedClients">0</div>
+                                <div class="stat-label">Connected Clients</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h3><i class="fas fa-exclamation-triangle"></i> System Control</h3>
+                        <div class="control-buttons">
+                            <button class="btn btn-warning" id="resetBmcu">
+                                <i class="fas fa-power-off"></i> Reset BMCU370
+                            </button>
+                            <button class="btn btn-danger" id="enterDfu">
+                                <i class="fas fa-download"></i> Enter DFU Mode
+                            </button>
+                            <button class="btn btn-info" id="resetEsp32">
+                                <i class="fas fa-refresh"></i> Reset ESP32
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h3><i class="fas fa-list-alt"></i> Recent Logs</h3>
+                        <div class="log-container" id="logContainer">
+                            <div class="log-entry">Loading logs...</div>
+                        </div>
+                        <button class="btn btn-outline" id="refreshLogs">
+                            <i class="fas fa-refresh"></i> Refresh Logs
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Network Tab -->
+            <div class="tab-content" id="network">
+                <div class="network-grid">
+                    <div class="card">
+                        <h3><i class="fas fa-wifi"></i> WiFi Status</h3>
+                        <div class="wifi-info">
+                            <div class="info-item">
+                                <label>Status:</label>
+                                <span id="wifiStatus" class="status-badge">Checking...</span>
+                            </div>
+                            <div class="info-item">
+                                <label>SSID:</label>
+                                <span id="wifiSSID">--</span>
+                            </div>
+                            <div class="info-item">
+                                <label>IP Address:</label>
+                                <span id="wifiIP">--</span>
+                            </div>
+                            <div class="info-item">
+                                <label>Signal Strength:</label>
+                                <span id="wifiSignal">--</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h3><i class="fas fa-search"></i> Network Scanner</h3>
+                        <button class="btn btn-primary" id="scanNetworks">
+                            <i class="fas fa-search"></i> Scan Networks
+                        </button>
+                        <div class="networks-list" id="networksList">
+                            <!-- Networks will be populated here -->
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h3><i class="fas fa-link"></i> WiFi Connection</h3>
+                        <form id="wifiForm" class="wifi-form">
+                            <div class="form-group">
+                                <label for="wifiSSIDInput">Network Name (SSID):</label>
+                                <input type="text" id="wifiSSIDInput" placeholder="Enter network name">
+                            </div>
+                            <div class="form-group">
+                                <label for="wifiPasswordInput">Password:</label>
+                                <input type="password" id="wifiPasswordInput" placeholder="Enter password">
+                            </div>
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-wifi"></i> Connect
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner">
+            <i class="fas fa-circle-notch fa-spin"></i>
+            <p>Loading...</p>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div class="toast" id="toast">
+        <span id="toastMessage"></span>
+        <button class="toast-close" id="toastClose">&times;</button>
+    </div>
+
+    <script src="/js/app.js"></script>
+</body>
+</html>
