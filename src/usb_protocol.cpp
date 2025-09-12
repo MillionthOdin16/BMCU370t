@@ -1,4 +1,5 @@
 #include "usb_protocol.h"
+#include "usb_cdc_device.h"
 #include "Debug_log.h"
 #include <string.h>
 #include <stdio.h>
@@ -79,20 +80,6 @@ static void usb_hardware_init(void) {
     // Channel 0 RGB functionality is disabled when USB is active
     DEBUG_MY("USB: Initializing - PA11 will be used for USB_DM (Channel 0 LEDs disabled)\n");
     
-    // Enable USB clock
-    RCC_APB1PeriphClockCmd(RCC_APB1Periph_USB, ENABLE);
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
-    
-    // Configure USB pins (PA11=USB_DM, PA12=USB_DP)
-    // WARNING: This overrides any previous PA11 configuration (e.g., RGB LEDs)
-    GPIO_InitTypeDef GPIO_InitStructure = {0};
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_11 | GPIO_Pin_12;
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
-    GPIO_Init(GPIOA, &GPIO_InitStructure);
-    
-    DEBUG_MY("USB: PA11 (USB_DM) and PA12 (USB_DP) configured for USB communication\n");
-    
     // Determine mode
     if (should_enter_dfu_mode()) {
         current_usb_mode = USB_MODE_DFU;
@@ -103,80 +90,78 @@ static void usb_hardware_init(void) {
         NVIC_SystemReset();
     } else {
         current_usb_mode = USB_MODE_CDC;
-        // Initialize CDC-ACM mode
+        // Initialize CDC-ACM mode with real hardware
         DEBUG_MY("USB: CDC mode - initializing communication\n");
         DEBUG_MY("USB: Channel 0 RGB LEDs unavailable due to PA11 pin sharing\n");
-        // Note: Full USB CDC stack would be initialized here
-        // For now, we set up basic enumeration
+        
+        // Initialize real USB CDC hardware
+        usb_cdc_init();
         usb_enumerated = false;
         usb_cdc_connected = false;
     }
 }
 
 // Check USB CDC connection status
-static bool usb_cdc_is_connected(void) {
+static bool usb_cdc_check_connection(void) {
     if (current_usb_mode != USB_MODE_CDC) {
         return false;
     }
     
-    // In a real implementation, this would check USB enumeration status
-    // For now, simulate connection after initialization
-    static uint32_t init_time = 0;
-    if (init_time == 0) {
-        init_time = get_time64();
-    }
+    // Use real USB CDC connection status
+    bool connected = usb_cdc_check_connection();
     
-    // Simulate USB enumeration after 2 seconds
-    if (!usb_enumerated && (get_time64() - init_time > 2000)) {
-        usb_enumerated = true;
+    // Update internal state
+    if (connected && !usb_cdc_connected) {
         usb_cdc_connected = true;
+        usb_enumerated = true;
         DEBUG_MY("USB CDC: Device enumerated and connected\n");
+    } else if (!connected && usb_cdc_connected) {
+        usb_cdc_connected = false;
+        usb_enumerated = false;
+        DEBUG_MY("USB CDC: Device disconnected\n");
     }
     
-    return usb_cdc_connected;
+    return connected;
 }
 
 // Read data from USB CDC
-static int usb_cdc_read(char* buffer, int max_length) {
-    if (!usb_cdc_is_connected() || !buffer || max_length <= 0) {
+static int usb_cdc_read_data(char* buffer, int max_length) {
+    if (!usb_cdc_check_connection() || !buffer || max_length <= 0) {
         return 0;
     }
     
-    // Real implementation would read from USB CDC RX buffer
-    // For now, return 0 (no data available) since this is a placeholder
-    // In actual implementation, this would interface with USB hardware
-    
-    return 0; // No data available (placeholder)
+    // Use real USB CDC hardware to read data
+    return usb_cdc_receive_data((uint8_t*)buffer, max_length);
 }
 
 // Write data to USB CDC
 static bool usb_cdc_write(const char* data, int length) {
-    if (!usb_cdc_is_connected() || !data || length <= 0) {
+    if (!usb_cdc_check_connection() || !data || length <= 0) {
         return false;
     }
     
-    // Real implementation would write to USB CDC TX buffer
-    // For development/testing, output to debug log as well
-    DEBUG_MY("USB TX: ");
-    char temp_char[2] = {0, 0};
-    for (int i = 0; i < length && i < 128; i++) { // Limit debug output
-        temp_char[0] = data[i];
-        DEBUG_MY(temp_char);
+    // Use real USB CDC hardware to send data
+    int sent = usb_cdc_send_data((const uint8_t*)data, length);
+    
+    // For development/testing, output to debug log as well (limited)
+    if (sent > 0) {
+        DEBUG_MY("USB TX: ");
+        char temp_char[2] = {0, 0};
+        for (int i = 0; i < sent && i < 64; i++) { // Limit debug output
+            temp_char[0] = data[i];
+            DEBUG_MY(temp_char);
+        }
+        if (sent > 64) DEBUG_MY("...");
+        DEBUG_MY("\n");
     }
-    DEBUG_MY("\n");
     
-    // In actual implementation, this would:
-    // 1. Copy data to USB TX buffer
-    // 2. Trigger USB transmission
-    // 3. Return true on success, false on error
-    
-    return true; // Assume success for now (placeholder)
+    return (sent == length);
 }
 
 #else
 // USB CDC disabled - provide stub functions
 static bool usb_cdc_is_connected(void) { return false; }
-static int usb_cdc_read(char* buffer, int max_length) { return 0; }
+static int usb_cdc_read_data(char* buffer, int max_length) { return 0; }
 static bool usb_cdc_write(const char* data, int length) { return false; }
 static void usb_hardware_init(void) { DEBUG_MY("USB: CDC disabled\n"); }
 #endif
@@ -320,7 +305,7 @@ int usb_protocol_process_commands(void) {
 
 void usb_protocol_run(void) {
     // Update connection state
-    if (usb_cdc_is_connected()) {
+    if (usb_cdc_check_connection()) {
         if (usb_state == USB_STATE_DISCONNECTED) {
             usb_state = USB_STATE_CONNECTED;
             DEBUG_MY("USB Protocol: Connected\n");
@@ -341,7 +326,7 @@ void usb_protocol_run(void) {
     if (usb_state == USB_STATE_READY) {
         int available_space = USB_RX_BUFFER_SIZE - usb_rx_pos - 1;
         if (available_space > 0) {
-            int bytes_read = usb_cdc_read(usb_rx_buffer + usb_rx_pos, available_space);
+            int bytes_read = usb_cdc_read_data(usb_rx_buffer + usb_rx_pos, available_space);
             if (bytes_read > 0) {
                 usb_rx_pos += bytes_read;
                 usb_rx_buffer[usb_rx_pos] = '\0'; // Ensure null termination

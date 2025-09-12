@@ -3,6 +3,7 @@
 #include "main.h"
 #include "config.h"
 #include "usb_status_api.h"
+#include "usb_cdc_device.h"
 
 #ifdef __cplusplus
 extern "C"
