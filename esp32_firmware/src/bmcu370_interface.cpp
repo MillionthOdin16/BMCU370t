@@ -52,10 +52,12 @@ bool BMCU370_USB_Host::connect() {
     
     // Only log connection attempts every 30 seconds to reduce spam
     static unsigned long last_log_time = 0;
+    static int connection_attempts = 0;
     bool should_log = (current_time - last_log_time) > 30000;
     
     if (should_log) {
-        ESP_LOGI(TAG, "Attempting to connect to BMCU370...");
+        connection_attempts++;
+        ESP_LOGI(TAG, "Attempting to connect to BMCU370 (attempt %d)...", connection_attempts);
         last_log_time = current_time;
     }
     
@@ -66,14 +68,26 @@ bool BMCU370_USB_Host::connect() {
     // 3. Open CDC-ACM interface
     // 4. Configure communication parameters
     
-    // Placeholder: simulate connection attempt
-    device_connected = enumerateDevice(); // Will be true when real hardware is connected
+    // Placeholder: simulate connection attempt with basic error handling
+    bool connection_result = enumerateDevice(); // Will be true when real hardware is connected
     
-    if (device_connected) {
+    if (connection_result && !device_connected) {
+        // New connection established
+        device_connected = true;
+        connection_attempts = 0; // Reset counter on successful connection
         ESP_LOGI(TAG, "Successfully connected to BMCU370");
         printDeviceInfo();
-    } else if (should_log) {
-        ESP_LOGW(TAG, "BMCU370 device not found (will retry every 30s)");
+    } else if (!connection_result && device_connected) {
+        // Connection lost
+        device_connected = false;
+        ESP_LOGW(TAG, "Lost connection to BMCU370 device");
+    } else if (!connection_result && should_log) {
+        ESP_LOGD(TAG, "BMCU370 device not found (will retry every %dms)", USB_RETRY_DELAY_MS);
+        
+        // After many failed attempts, suggest troubleshooting
+        if (connection_attempts > 10) {
+            ESP_LOGW(TAG, "Failed to connect after %d attempts. Check USB cable and BMCU370 power.", connection_attempts);
+        }
     }
     
     return device_connected;

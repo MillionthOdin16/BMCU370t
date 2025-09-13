@@ -130,7 +130,7 @@ bool get_filament_online(int num)
 }
 void set_filament_motion(int num, AMS_filament_motion motion)
 {
-    if (num < 4)
+    if (num >= 0 && num < 4)
     {
         _filament *filament = &(data_save.filament[num]);
         filament->motion_set = motion;
@@ -153,9 +153,10 @@ void set_filament_motion(int num, AMS_filament_motion motion)
             }
     }
 }
+
 AMS_filament_motion get_filament_motion(int num)
 {
-    if (num < 4)
+    if (num >= 0 && num < 4)
         return data_save.filament[num].motion_set;
     else
         return AMS_filament_motion::idle;
@@ -1040,8 +1041,17 @@ void send_for_long_packge_filament(unsigned char *buf, int length)
 
     uint8_t AMS_num = printer_data_long.datas[0];
     uint8_t filament_num = printer_data_long.datas[1];
-    if (AMS_num != BambuBus_AMS_num)
+    
+    // Critical bounds checking for array access safety
+    if (AMS_num != BambuBus_AMS_num) {
         return;
+    }
+    
+    if (filament_num >= 4) {
+        DEBUG_MY("BambuBus: Invalid filament_num, ignoring request\n");
+        return;
+    }
+    
     long_packge_filament[0] = BambuBus_AMS_num;
     long_packge_filament[1] = filament_num;
     memcpy(long_packge_filament + 19, data_save.filament[filament_num].ID, sizeof(data_save.filament[filament_num].ID));
