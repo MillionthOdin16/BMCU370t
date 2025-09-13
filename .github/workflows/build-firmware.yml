@@ -160,8 +160,8 @@ jobs:
         echo "Branch: ${{ github.ref_name }}" >> firmware-artifacts/esp32/build_info.txt
         echo "" >> firmware-artifacts/esp32/build_info.txt
         echo "Build Environment: esp32s3" >> firmware-artifacts/esp32/build_info.txt
-        echo "Platform: ESP32-S3 N4R2 (4MB Flash + 2MB OPI PSRAM)" >> firmware-artifacts/esp32/build_info.txt
-        echo "Hardware: N4 = 4MB NAND Flash, R2 = 2MB OPI PSRAM" >> firmware-artifacts/esp32/build_info.txt
+        echo "Platform: ESP32-S3 N4R2 (4MB Flash + 2MB QSPI PSRAM)" >> firmware-artifacts/esp32/build_info.txt
+        echo "Hardware: N4 = 4MB NAND Flash, R2 = 2MB QSPI PSRAM" >> firmware-artifacts/esp32/build_info.txt
         echo "Features: USB Host, Web Server, WiFi, OTA Updates, Historical Data, Enhanced PSRAM Support" >> firmware-artifacts/esp32/build_info.txt
         echo "Flash Mode: DIO, 80MHz optimized for N4R2 variant" >> firmware-artifacts/esp32/build_info.txt
         echo "" >> firmware-artifacts/esp32/build_info.txt
@@ -183,10 +183,13 @@ jobs:
           echo "Your ESP32-S3 N4R2 should identify as:"
           echo "- Chip: ESP32-S3 (QFN56) rev 0.1"
           echo "- Flash: Embedded Flash 4MB (N4 variant)"
-          echo "- PSRAM: Embedded PSRAM 2MB (R2 variant, OPI mode)"
+          echo "- PSRAM: Embedded PSRAM 2MB (R2 variant, QSPI mode)"
+          echo ""
+          echo "CRITICAL BUG FIXES APPLIED:"
+          echo "- Flash Size: Force 4MB flash size to fix binary header mismatch"
+          echo "- eFuse Fix: Changed from OPI to QSPI PSRAM mode to fix eFuse error"
           echo ""
           echo "Optimized Flash Command for ESP32-S3 N4R2:"
-          echo "CRITICAL: Force 4MB flash size to fix binary header mismatch"
           echo ""
           echo "esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \\"
           echo "  write_flash --flash_size 4MB --flash_mode dio --flash_freq 80m \\"

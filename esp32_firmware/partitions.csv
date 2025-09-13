@@ -1,6 +1,6 @@
 # Name,   Type, SubType, Offset,  Size, Flags
 # Optimized partition table for ESP32-S3 N4R2 (4MB Flash + 2MB PSRAM)
-# N4 = 4MB NAND Flash, R2 = 2MB OPI PSRAM
+# N4 = 4MB NAND Flash, R2 = 2MB QSPI PSRAM
 # Total 4MB (4,194,304 bytes) with optimal sector alignment for N4R2
 nvs,      data, nvs,     0x9000,  0x5000,
 otadata,  data, ota,     0xe000,  0x2000,
