@@ -153,16 +153,17 @@ jobs:
         cd ..
         
         # Create build info
-        echo "ESP32 Firmware Build Information" > firmware-artifacts/esp32/build_info.txt
-        echo "=================================" >> firmware-artifacts/esp32/build_info.txt
+        echo "ESP32-S3 N4R2 Firmware Build Information" > firmware-artifacts/esp32/build_info.txt
+        echo "=========================================" >> firmware-artifacts/esp32/build_info.txt
         echo "Build Date: $(date)" >> firmware-artifacts/esp32/build_info.txt
         echo "Commit: ${{ github.sha }}" >> firmware-artifacts/esp32/build_info.txt
         echo "Branch: ${{ github.ref_name }}" >> firmware-artifacts/esp32/build_info.txt
         echo "" >> firmware-artifacts/esp32/build_info.txt
         echo "Build Environment: esp32s3" >> firmware-artifacts/esp32/build_info.txt
-        echo "Platform: ESP32-S3 (4MB Flash + 2MB PSRAM)" >> firmware-artifacts/esp32/build_info.txt
-        echo "Features: USB Host, Web Server, WiFi, OTA Updates, Historical Data, PSRAM Support" >> firmware-artifacts/esp32/build_info.txt
-        echo "Flash Mode: DIO, 80MHz" >> firmware-artifacts/esp32/build_info.txt
+        echo "Platform: ESP32-S3 N4R2 (4MB Flash + 2MB OPI PSRAM)" >> firmware-artifacts/esp32/build_info.txt
+        echo "Hardware: N4 = 4MB NAND Flash, R2 = 2MB OPI PSRAM" >> firmware-artifacts/esp32/build_info.txt
+        echo "Features: USB Host, Web Server, WiFi, OTA Updates, Historical Data, Enhanced PSRAM Support" >> firmware-artifacts/esp32/build_info.txt
+        echo "Flash Mode: DIO, 80MHz optimized for N4R2 variant" >> firmware-artifacts/esp32/build_info.txt
         echo "" >> firmware-artifacts/esp32/build_info.txt
         
         # Get memory usage
@@ -171,15 +172,20 @@ jobs:
         
         # Create flash instructions
         {
-          echo "ESP32-S3 Firmware Flash Instructions (4MB Flash + 2MB PSRAM)"
-          echo "============================================================="
+          echo "ESP32-S3 N4R2 Firmware Flash Instructions"
+          echo "=========================================="
           echo ""
           echo "Hardware Requirements:"
-          echo "- ESP32-S3 with 4MB Flash + 2MB PSRAM (OPI mode)"
+          echo "- ESP32-S3 N4R2 variant (4MB NAND Flash + 2MB OPI PSRAM)"
           echo "- USB-OTG capability for BMCU370 communication"
           echo "- esptool.py installed: pip install esptool"
           echo ""
-          echo "Recommended Flash Command (complete firmware):"
+          echo "Your ESP32-S3 N4R2 should identify as:"
+          echo "- Chip: ESP32-S3 (QFN56) rev 0.1"
+          echo "- Flash: Embedded Flash 4MB (N4 variant)"
+          echo "- PSRAM: Embedded PSRAM 2MB (R2 variant, OPI mode)"
+          echo ""
+          echo "Optimized Flash Command for ESP32-S3 N4R2:"
           echo "esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \\"
           echo "  write_flash --flash_mode dio --flash_freq 80m --flash_size 4MB \\"
           echo "  0x0000 esp32_bootloader.bin \\"

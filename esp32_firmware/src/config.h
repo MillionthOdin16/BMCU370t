@@ -1,6 +1,19 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+// ESP32-S3 N4R2 Hardware identification
+#ifdef ESP32_S3_N4R2_VARIANT
+#define HARDWARE_VARIANT "ESP32-S3 N4R2"
+#define FLASH_SIZE_MB 4
+#define PSRAM_SIZE_MB 2
+#define PSRAM_TYPE "OPI"
+#else
+#define HARDWARE_VARIANT "ESP32-S3"
+#define FLASH_SIZE_MB 4
+#define PSRAM_SIZE_MB 2
+#define PSRAM_TYPE "Unknown"
+#endif
+
 // Version information
 #ifndef BMCU370_INTERFACE_VERSION
 #define BMCU370_INTERFACE_VERSION "1.0.0"
@@ -12,15 +25,25 @@
 #define USB_TIMEOUT_MS              1000    // USB communication timeout
 #define USB_RETRY_DELAY_MS          2000    // Delay between USB connection retries
 
-// Buffer sizes - optimized for ESP32-S3 with PSRAM
+// Buffer sizes - optimized for ESP32-S3 N4R2 with 2MB OPI PSRAM
 #ifdef BOARD_HAS_PSRAM
-#define USB_COMMAND_BUFFER_SIZE     512     // Larger command buffer with PSRAM
-#define USB_RESPONSE_BUFFER_SIZE    4096    // Larger response buffer for complex JSON
-#define JSON_BUFFER_SIZE            8192    // Larger JSON document buffer
+  #ifdef ESP32_S3_N4R2_VARIANT
+    // Enhanced buffer sizes for N4R2 variant with OPI PSRAM
+    #define USB_COMMAND_BUFFER_SIZE     1024    // Larger command buffer for N4R2
+    #define USB_RESPONSE_BUFFER_SIZE    8192    // Enhanced response buffer with OPI PSRAM
+    #define JSON_BUFFER_SIZE            16384   // Large JSON document buffer for N4R2
+    #define WEBSOCKET_BUFFER_SIZE       4096    // Enhanced WebSocket buffer
+  #else
+    #define USB_COMMAND_BUFFER_SIZE     512     // Standard PSRAM command buffer
+    #define USB_RESPONSE_BUFFER_SIZE    4096    // Standard PSRAM response buffer
+    #define JSON_BUFFER_SIZE            8192    // Standard PSRAM JSON buffer
+    #define WEBSOCKET_BUFFER_SIZE       2048    // Standard WebSocket buffer
+  #endif
 #else
 #define USB_COMMAND_BUFFER_SIZE     256     // Standard command buffer size
 #define USB_RESPONSE_BUFFER_SIZE    2048    // Standard response buffer size
 #define JSON_BUFFER_SIZE            4096    // Standard JSON document buffer size
+#define WEBSOCKET_BUFFER_SIZE       1024    // Standard WebSocket buffer
 #endif
 
 // WiFi configuration

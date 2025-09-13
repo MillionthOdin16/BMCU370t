@@ -25,20 +25,24 @@ bool system_ready = false;
 
 void setup() {
     Serial.begin(115200);
-    Serial.println("\n=== ESP32-S3 BMCU370 Web Interface ===");
+    Serial.println("\n=== ESP32-S3 N4R2 BMCU370 Web Interface ===");
+    Serial.println("Hardware: " + String(HARDWARE_VARIANT));
     Serial.println("Version: " + String(BMCU370_INTERFACE_VERSION));
     
-    // Display hardware information
+    // Display ESP32-S3 N4R2 hardware information
     Serial.printf("ESP32-S3 Chip: %s\n", ESP.getChipModel());
-    Serial.printf("Flash Size: %d MB\n", ESP.getFlashChipSize() / (1024 * 1024));
+    Serial.printf("Flash Size: %d MB (N%d variant)\n", ESP.getFlashChipSize() / (1024 * 1024), FLASH_SIZE_MB);
     Serial.printf("Free Heap: %d bytes\n", ESP.getFreeHeap());
     
 #ifdef BOARD_HAS_PSRAM
     if (psramFound()) {
-        Serial.printf("PSRAM Found: %d MB\n", ESP.getPsramSize() / (1024 * 1024));
+        Serial.printf("PSRAM Found: %d MB (%s mode)\n", ESP.getPsramSize() / (1024 * 1024), PSRAM_TYPE);
         Serial.printf("Free PSRAM: %d bytes\n", ESP.getFreePsram());
+        #ifdef ESP32_S3_N4R2_VARIANT
+        Serial.println("ESP32-S3 N4R2 variant detected - Enhanced buffer allocation enabled");
+        #endif
     } else {
-        Serial.println("WARNING: PSRAM not found - expected 2MB PSRAM");
+        Serial.printf("WARNING: PSRAM not found - expected %dMB %s PSRAM\n", PSRAM_SIZE_MB, PSRAM_TYPE);
     }
 #endif
     

@@ -1,22 +1,23 @@
 #!/usr/bin/env python3
 """
-ESP32-S3 Configuration Validator
-Validates ESP32-S3 hardware compatibility and flashing configuration
+ESP32-S3 N4R2 Configuration Validator
+Validates ESP32-S3 N4R2 hardware compatibility and flashing configuration
+N4 = 4MB NAND Flash, R2 = 2MB OPI PSRAM
 """
 
 import sys
 import os
 
 def validate_partition_table():
-    """Validate partition table for ESP32-S3 4MB Flash"""
-    print("=== Partition Table Validation ===")
+    """Validate partition table for ESP32-S3 N4R2 (4MB Flash)"""
+    print("=== Partition Table Validation (ESP32-S3 N4R2) ===")
     
     partitions_file = "partitions.csv"
     if not os.path.exists(partitions_file):
         print("❌ ERROR: partitions.csv not found")
         return False
     
-    total_flash = 4 * 1024 * 1024  # 4MB in bytes
+    total_flash = 4 * 1024 * 1024  # 4MB in bytes (N4 variant)
     used_space = 0
     
     with open(partitions_file, 'r') as f:
@@ -49,8 +50,8 @@ def validate_partition_table():
     return True
 
 def validate_platformio_config():
-    """Validate PlatformIO configuration for ESP32-S3"""
-    print("\n=== PlatformIO Configuration Validation ===")
+    """Validate PlatformIO configuration for ESP32-S3 N4R2"""
+    print("\n=== PlatformIO Configuration Validation (ESP32-S3 N4R2) ===")
     
     config_file = "platformio.ini"
     if not os.path.exists(config_file):
@@ -62,11 +63,13 @@ def validate_platformio_config():
     
     required_settings = {
         'board = esp32-s3-devkitc-1': 'ESP32-S3 board definition',
-        'board_build.flash_size = 4MB': '4MB flash size configuration',
-        'board_build.psram_type = opi': 'PSRAM type configuration',
+        'board_build.flash_size = 4MB': '4MB flash size (N4 variant)',
+        'board_build.psram_type = opi': 'OPI PSRAM type (R2 variant)',
+        'board_build.memory_type = opi_opi': 'OPI memory configuration for N4R2',
         'board_build.usb_mode = otg': 'USB OTG mode for host functionality',
         'BOARD_HAS_PSRAM': 'PSRAM support flag',
-        'CONFIG_SPIRAM_SUPPORT=1': 'PSRAM support in SDK'
+        'CONFIG_SPIRAM_SUPPORT=1': 'PSRAM support in SDK',
+        'ESP32_S3_N4R2_VARIANT=1': 'N4R2 variant identification'
     }
     
     all_valid = True
@@ -80,17 +83,19 @@ def validate_platformio_config():
     return all_valid
 
 def validate_flash_settings():
-    """Validate flash-specific settings"""
-    print("\n=== Flash Settings Validation ===")
+    """Validate flash-specific settings for ESP32-S3 N4R2"""
+    print("\n=== Flash Settings Validation (ESP32-S3 N4R2) ===")
     
     config_file = "platformio.ini"
     with open(config_file, 'r') as f:
         content = f.read()
     
     flash_settings = {
-        'board_build.flash_mode = dio': 'DIO flash mode for ESP32-S3',
-        'board_build.flash_freq = 80m': '80MHz flash frequency',
-        'partitions.csv': 'Custom partition table'
+        'board_build.flash_mode = dio': 'DIO flash mode for ESP32-S3 N4R2',
+        'board_build.flash_freq = 80m': '80MHz flash frequency for N4 variant',
+        'partitions.csv': 'Custom partition table optimized for N4R2',
+        'CONFIG_SPIRAM_SPEED_80M=1': '80MHz PSRAM speed for R2 variant',
+        'board_build.arduino.memory_type = opi_opi': 'Arduino OPI memory type for N4R2'
     }
     
     all_valid = True
@@ -104,8 +109,9 @@ def validate_flash_settings():
 
 def main():
     """Main validation function"""
-    print("ESP32-S3 BMCU370 Interface Configuration Validator")
-    print("=" * 50)
+    print("ESP32-S3 N4R2 BMCU370 Interface Configuration Validator")
+    print("N4 = 4MB NAND Flash, R2 = 2MB OPI PSRAM")
+    print("=" * 60)
     
     # Change to script directory
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -118,14 +124,18 @@ def main():
     
     print("\n=== Validation Summary ===")
     if all(results):
-        print("✅ All validations passed! ESP32-S3 configuration is optimal.")
-        print("\nRecommended flashing command:")
+        print("✅ All validations passed! ESP32-S3 N4R2 configuration is optimal.")
+        print("\nOptimized flashing command for ESP32-S3 N4R2:")
         print("esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \\")
         print("  write_flash --flash_mode dio --flash_freq 80m --flash_size 4MB \\")
         print("  0x0 bootloader.bin 0x8000 partitions.bin 0x10000 firmware.bin")
+        print("\nHardware verification should show:")
+        print("- ESP32-S3 (QFN56) rev 0.1")
+        print("- Embedded Flash 4MB (N4 variant)")
+        print("- Embedded PSRAM 2MB (R2 variant)")
         return 0
     else:
-        print("❌ Some validations failed. Please review the configuration.")
+        print("❌ Some validations failed. Please review the ESP32-S3 N4R2 configuration.")
         return 1
 
 if __name__ == "__main__":
