@@ -46,21 +46,47 @@ void setup() {
     }
 #endif
     
-    // Initialize file system for web interface
-    bool littlefs_mounted = LittleFS.begin(true);
+    // Initialize file system for web interface with enhanced error handling
+    Serial.println("Initializing LittleFS filesystem...");
+    bool littlefs_mounted = LittleFS.begin(false);
+    
     if (!littlefs_mounted) {
-        Serial.println("ERROR: Failed to initialize file system");
-        Serial.println("Web interface will use fallback mode (API only)");
+        Serial.println("WARN: LittleFS mount failed, attempting format and retry...");
+        if (LittleFS.format()) {
+            Serial.println("LittleFS format successful, retrying mount...");
+            littlefs_mounted = LittleFS.begin(false);
+        }
+    }
+    
+    if (!littlefs_mounted) {
+        Serial.println("ERROR: Failed to initialize LittleFS filesystem");
+        Serial.println("Possible causes:");
+        Serial.println("  1. LittleFS partition not flashed");
+        Serial.println("  2. Partition table mismatch");
+        Serial.println("  3. Flash corruption");
+        Serial.println("Web interface will use enhanced fallback mode with full WiFi setup");
     } else {
-        Serial.println("File system initialized successfully");
+        Serial.println("✓ LittleFS filesystem mounted successfully");
+        
+        // Display filesystem info
+        size_t totalBytes = LittleFS.totalBytes();
+        size_t usedBytes = LittleFS.usedBytes();
+        Serial.printf("LittleFS: %d/%d bytes used (%.1f%%)\n", 
+                     usedBytes, totalBytes, (float)usedBytes/totalBytes*100);
+        
         // List files in LittleFS for debugging
         File root = LittleFS.open("/");
         if (root && root.isDirectory()) {
             Serial.println("LittleFS contents:");
             File file = root.openNextFile();
+            int fileCount = 0;
             while (file) {
                 Serial.printf("  %s (%d bytes)\n", file.name(), file.size());
                 file = root.openNextFile();
+                fileCount++;
+            }
+            if (fileCount == 0) {
+                Serial.println("  (empty - web files not uploaded)");
             }
         }
     }

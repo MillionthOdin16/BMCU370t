@@ -50,7 +50,14 @@ bool BMCU370_USB_Host::connect() {
     
     last_connect_attempt = current_time;
     
-    ESP_LOGI(TAG, "Attempting to connect to BMCU370...");
+    // Only log connection attempts every 30 seconds to reduce spam
+    static unsigned long last_log_time = 0;
+    bool should_log = (current_time - last_log_time) > 30000;
+    
+    if (should_log) {
+        ESP_LOGI(TAG, "Attempting to connect to BMCU370...");
+        last_log_time = current_time;
+    }
     
     // TODO: Implement actual USB device enumeration and connection
     // This would involve:
@@ -65,8 +72,8 @@ bool BMCU370_USB_Host::connect() {
     if (device_connected) {
         ESP_LOGI(TAG, "Successfully connected to BMCU370");
         printDeviceInfo();
-    } else {
-        ESP_LOGW(TAG, "BMCU370 device not found");
+    } else if (should_log) {
+        ESP_LOGW(TAG, "BMCU370 device not found (will retry every 30s)");
     }
     
     return device_connected;

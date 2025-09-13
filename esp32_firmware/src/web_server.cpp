@@ -172,123 +172,324 @@ void WebServerManager::setupStaticFiles() {
 }
 
 void WebServerManager::setupFallbackInterface() {
-    ESP_LOGI(TAG, "Setting up fallback web interface (no LittleFS)");
+    ESP_LOGI(TAG, "Setting up enhanced fallback web interface (no LittleFS)");
     
-    // Serve a simple HTML page from program memory
+    // Serve a comprehensive HTML page from program memory with full WiFi setup
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-        String html = "<!DOCTYPE html><html><head><title>BMCU370 Interface - Fallback Mode</title>";
+        String html = "<!DOCTYPE html><html><head><title>BMCU370 Interface - Setup Mode</title>";
         html += "<meta name='viewport' content='width=device-width, initial-scale=1'>";
+        html += "<link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css'>";
         html += "<style>";
-        html += "body { font-family: Arial, sans-serif; margin: 20px; background: #f0f0f0; }";
-        html += ".container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; }";
-        html += ".header { text-align: center; color: #333; margin-bottom: 20px; }";
-        html += ".status { padding: 10px; margin: 10px 0; border-radius: 5px; }";
-        html += ".error { background: #ffebee; border: 1px solid #f44336; color: #c62828; }";
-        html += ".info { background: #e3f2fd; border: 1px solid #2196f3; color: #1565c0; }";
-        html += ".warning { background: #fff3e0; border: 1px solid #ff9800; color: #ef6c00; }";
-        html += "button { background: #2196f3; color: white; border: none; padding: 10px 20px; margin: 5px; border-radius: 5px; cursor: pointer; }";
-        html += "button:hover { background: #1976d2; }";
-        html += ".section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }";
-        html += "pre { background: #f5f5f5; padding: 10px; border-radius: 3px; overflow-x: auto; font-size: 12px; }";
-        html += ".refresh-btn { float: right; }";
+        html += "* { box-sizing: border-box; margin: 0; padding: 0; }";
+        html += "body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; ";
+        html += "background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }";
+        html += ".container { max-width: 800px; margin: 0 auto; }";
+        html += ".card { background: white; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); ";
+        html += "margin-bottom: 20px; overflow: hidden; }";
+        html += ".header { background: linear-gradient(45deg, #2196F3, #21CBF3); color: white; padding: 30px; text-align: center; }";
+        html += ".header h1 { font-size: 2em; margin-bottom: 10px; }";
+        html += ".header .subtitle { opacity: 0.9; font-size: 1.1em; }";
+        html += ".status { padding: 15px; margin: 15px; border-radius: 8px; font-weight: 500; }";
+        html += ".status.warning { background: #fff3cd; border: 1px solid #ffeaa7; color: #856404; }";
+        html += ".status.info { background: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; }";
+        html += ".status.success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; }";
+        html += ".section { padding: 25px; border-bottom: 1px solid #eee; }";
+        html += ".section:last-child { border-bottom: none; }";
+        html += ".section h3 { color: #333; margin-bottom: 15px; font-size: 1.3em; }";
+        html += ".form-group { margin-bottom: 20px; }";
+        html += ".form-group label { display: block; margin-bottom: 8px; font-weight: 600; color: #555; }";
+        html += ".form-control { width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; ";
+        html += "font-size: 16px; transition: border-color 0.3s; }";
+        html += ".form-control:focus { outline: none; border-color: #2196F3; }";
+        html += ".btn { padding: 12px 24px; border: none; border-radius: 8px; font-size: 16px; ";
+        html += "font-weight: 600; cursor: pointer; transition: all 0.3s; margin: 5px; text-decoration: none; display: inline-block; }";
+        html += ".btn-primary { background: #2196F3; color: white; }";
+        html += ".btn-primary:hover { background: #1976D2; transform: translateY(-2px); }";
+        html += ".btn-success { background: #4CAF50; color: white; }";
+        html += ".btn-success:hover { background: #45a049; transform: translateY(-2px); }";
+        html += ".btn-secondary { background: #6c757d; color: white; }";
+        html += ".btn-secondary:hover { background: #5a6268; transform: translateY(-2px); }";
+        html += ".networks-list { max-height: 300px; overflow-y: auto; border: 2px solid #eee; border-radius: 8px; margin-top: 10px; }";
+        html += ".network-item { padding: 15px; border-bottom: 1px solid #eee; cursor: pointer; transition: background 0.3s; }";
+        html += ".network-item:hover { background: #f8f9fa; }";
+        html += ".network-item:last-child { border-bottom: none; }";
+        html += ".network-info { display: flex; justify-content: space-between; align-items: center; }";
+        html += ".network-name { font-weight: 600; color: #333; }";
+        html += ".network-signal { color: #666; font-size: 0.9em; }";
+        html += ".network-security { background: #e9ecef; padding: 2px 8px; border-radius: 4px; font-size: 0.8em; }";
+        html += ".no-networks { text-align: center; padding: 30px; color: #666; }";
+        html += ".grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; }";
+        html += ".info-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }";
+        html += ".info-item:last-child { border-bottom: none; }";
+        html += ".info-item label { font-weight: 600; color: #555; }";
+        html += ".status-badge { padding: 4px 12px; border-radius: 20px; font-size: 0.9em; font-weight: 600; }";
+        html += ".status-connected { background: #d4edda; color: #155724; }";
+        html += ".status-disconnected { background: #f8d7da; color: #721c24; }";
+        html += ".help-text { background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 15px 0; color: #6c757d; }";
+        html += ".loading { display: none; text-align: center; padding: 20px; }";
+        html += ".spinner { border: 3px solid #f3f3f3; border-top: 3px solid #2196F3; border-radius: 50%; ";
+        html += "width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 0 auto 10px; }";
+        html += "@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }";
+        html += "pre { background: #f8f9fa; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 14px; margin-top: 10px; }";
+        html += ".toast { position: fixed; top: 20px; right: 20px; background: #333; color: white; ";
+        html += "padding: 15px 20px; border-radius: 8px; z-index: 1000; display: none; }";
+        html += ".toast.success { background: #4CAF50; }";
+        html += ".toast.error { background: #f44336; }";
         html += "</style></head><body>";
         
         html += "<div class='container'>";
+        
+        // Header
+        html += "<div class='card'>";
         html += "<div class='header'>";
-        html += "<h1>🔧 BMCU370 Interface</h1>";
-        html += "<h3>Fallback Mode - LittleFS Not Available</h3>";
-        html += "<button class='refresh-btn' onclick='location.reload()'>🔄 Refresh</button>";
+        html += "<h1><i class='fas fa-wifi'></i> BMCU370 WiFi Setup</h1>";
+        html += "<div class='subtitle'>Connect your BMCU370 to your home network</div>";
         html += "</div>";
         
-        html += "<div class='status error'>";
-        html += "<strong>⚠️ Limited Functionality:</strong> LittleFS filesystem is not mounted. Only basic API functionality is available.";
+        html += "<div class='status warning'>";
+        html += "<i class='fas fa-exclamation-triangle'></i> ";
+        html += "<strong>Setup Mode:</strong> LittleFS filesystem not available. Using enhanced fallback interface.";
+        html += "</div>";
         html += "</div>";
         
+        // WiFi Status
+        html += "<div class='card'>";
         html += "<div class='section'>";
-        html += "<h3>📡 Network Information</h3>";
-        html += "<p><strong>WiFi Status:</strong> <span id='wifi-status'>Checking...</span></p>";
-        html += "<p><strong>IP Address:</strong> <span id='ip-address'>Checking...</span></p>";
-        html += "<p><strong>Access Point:</strong> BMCU370-Config (password: bmcu370pass)</p>";
+        html += "<h3><i class='fas fa-signal'></i> Current Network Status</h3>";
+        html += "<div class='grid'>";
+        html += "<div class='info-item'><label>WiFi Status:</label><span id='wifi-status' class='status-badge'>Checking...</span></div>";
+        html += "<div class='info-item'><label>Current Network:</label><span id='wifi-ssid'>--</span></div>";
+        html += "<div class='info-item'><label>IP Address:</label><span id='wifi-ip'>--</span></div>";
+        html += "<div class='info-item'><label>Signal Strength:</label><span id='wifi-signal'>--</span></div>";
+        html += "</div>";
+        html += "<div class='help-text'>";
+        html += "<i class='fas fa-info-circle'></i> ";
+        html += "You are currently connected to the <strong>BMCU370-Config</strong> setup network. ";
+        html += "Use the form below to connect to your home WiFi network.";
+        html += "</div>";
+        html += "</div>";
         html += "</div>";
         
+        // Network Scanner
+        html += "<div class='card'>";
         html += "<div class='section'>";
-        html += "<h3>🔌 BMCU370 Connection</h3>";
-        html += "<p><strong>Status:</strong> <span id='bmcu-status'>Checking...</span></p>";
-        html += "<button onclick='checkBMCU()'>🔍 Check Connection</button>";
-        html += "<button onclick='resetBMCU()'>🔄 Reset BMCU370</button>";
+        html += "<h3><i class='fas fa-search'></i> Available Networks</h3>";
+        html += "<p>Scan for available WiFi networks and click on one to select it:</p>";
+        html += "<button class='btn btn-primary' onclick='scanNetworks()'>";
+        html += "<i class='fas fa-search'></i> Scan for Networks";
+        html += "</button>";
+        html += "<div class='loading' id='scan-loading'>";
+        html += "<div class='spinner'></div>";
+        html += "<p>Scanning for networks...</p>";
+        html += "</div>";
+        html += "<div class='networks-list' id='networks-list'>";
+        html += "<div class='no-networks'>Click \"Scan for Networks\" to see available WiFi networks</div>";
+        html += "</div>";
+        html += "</div>";
         html += "</div>";
         
+        // Connection Form
+        html += "<div class='card'>";
         html += "<div class='section'>";
-        html += "<h3>📊 API Endpoints</h3>";
-        html += "<p>Since the full web interface is not available, you can use these API endpoints directly:</p>";
+        html += "<h3><i class='fas fa-link'></i> Connect to WiFi Network</h3>";
+        html += "<p>Enter your WiFi network credentials:</p>";
+        html += "<form id='wifi-form' onsubmit='connectWiFi(event)'>";
+        html += "<div class='form-group'>";
+        html += "<label for='ssid'>Network Name (SSID):</label>";
+        html += "<input type='text' id='ssid' class='form-control' placeholder='Enter network name or select from scan results' required>";
+        html += "</div>";
+        html += "<div class='form-group'>";
+        html += "<label for='password'>Password:</label>";
+        html += "<input type='password' id='password' class='form-control' placeholder='Enter WiFi password (leave blank for open networks)'>";
+        html += "</div>";
+        html += "<button type='submit' class='btn btn-success'>";
+        html += "<i class='fas fa-wifi'></i> Connect to Network";
+        html += "</button>";
+        html += "<div class='loading' id='connect-loading'>";
+        html += "<div class='spinner'></div>";
+        html += "<p>Connecting to network...</p>";
+        html += "</div>";
+        html += "</form>";
+        html += "<div class='help-text'>";
+        html += "<i class='fas fa-lightbulb'></i> ";
+        html += "After connecting successfully, the device will remember your network and connect automatically in the future.";
+        html += "</div>";
+        html += "</div>";
+        html += "</div>";
+        
+        // System Information
+        html += "<div class='card'>";
+        html += "<div class='section'>";
+        html += "<h3><i class='fas fa-microchip'></i> System Information</h3>";
+        html += "<div class='grid'>";
+        html += "<div class='info-item'><label>BMCU370 Status:</label><span id='bmcu-status' class='status-badge'>Checking...</span></div>";
+        html += "<div class='info-item'><label>Device Type:</label><span>ESP32-S3 N4R2</span></div>";
+        html += "<div class='info-item'><label>Interface Version:</label><span>1.0.0</span></div>";
+        html += "<div class='info-item'><label>Config Mode IP:</label><span>192.168.4.1</span></div>";
+        html += "</div>";
+        html += "<button class='btn btn-secondary' onclick='checkBMCU()'>";
+        html += "<i class='fas fa-sync'></i> Check BMCU370 Connection";
+        html += "</button>";
+        html += "</div>";
+        html += "</div>";
+        
+        // Troubleshooting
+        html += "<div class='card'>";
+        html += "<div class='section'>";
+        html += "<h3><i class='fas fa-tools'></i> Troubleshooting</h3>";
+        html += "<div class='status info'>";
+        html += "<strong>LittleFS Issue:</strong> The web interface files are not available. ";
+        html += "This may be due to incomplete firmware flashing.";
+        html += "</div>";
+        html += "<p><strong>To fix LittleFS:</strong></p>";
+        html += "<pre>esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \\<br>";
+        html += "  write_flash --flash_size 4MB 0x310000 littlefs.bin</pre>";
+        html += "<p><strong>API Endpoints (for advanced users):</strong></p>";
         html += "<ul>";
         html += "<li><a href='/api/status' target='_blank'>GET /api/status</a> - System status</li>";
-        html += "<li><a href='/api/config' target='_blank'>GET /api/config</a> - Configuration</li>";
         html += "<li><a href='/api/wifi/status' target='_blank'>GET /api/wifi/status</a> - WiFi status</li>";
-        html += "<li><a href='/api/logs' target='_blank'>GET /api/logs</a> - System logs</li>";
+        html += "<li><a href='/api/wifi/scan' target='_blank'>GET /api/wifi/scan</a> - Network scan</li>";
         html += "</ul>";
         html += "</div>";
+        html += "</div>";
         
-        html += "<div class='section'>";
-        html += "<h3>🛠️ Troubleshooting</h3>";
-        html += "<div class='info'>";
-        html += "<strong>To fix LittleFS issue:</strong>";
-        html += "<ol>";
-        html += "<li>Reflash the LittleFS partition: <code>esptool.py write_flash 0x310000 littlefs.bin</code></li>";
-        html += "<li>Use lower baud rate if flashing fails: <code>--baud 460800</code></li>";
-        html += "<li>Try complete firmware reflash with partition table</li>";
-        html += "</ol>";
         html += "</div>";
-        html += "<button onclick='showLogs()'>📋 Show System Logs</button>";
-        html += "<pre id='logs' style='display:none;'></pre>";
-        html += "</div>";
-        html += "</div>";
+        
+        // Toast notification
+        html += "<div class='toast' id='toast'><span id='toast-message'></span></div>";
         
         // JavaScript for functionality
         html += "<script>";
+        html += "let scanTimeout = null;";
+        html += "function showToast(message, type = 'info') {";
+        html += "  const toast = document.getElementById('toast');";
+        html += "  const msg = document.getElementById('toast-message');";
+        html += "  msg.textContent = message;";
+        html += "  toast.className = 'toast ' + type;";
+        html += "  toast.style.display = 'block';";
+        html += "  setTimeout(() => { toast.style.display = 'none'; }, 5000);";
+        html += "}";
+        
         html += "function updateStatus() {";
-        html += "  fetch('/api/wifi/status').then(r => r.json()).then(d => {";
-        html += "    document.getElementById('wifi-status').textContent = d.status || 'Unknown';";
-        html += "    document.getElementById('ip-address').textContent = d.ip || 'Unknown';";
-        html += "  }).catch(() => {";
-        html += "    document.getElementById('wifi-status').textContent = 'Error';";
-        html += "    document.getElementById('ip-address').textContent = 'Error';";
-        html += "  });";
-        html += "  fetch('/api/status').then(r => r.json()).then(d => {";
-        html += "    document.getElementById('bmcu-status').textContent = d.connected ? 'Connected ✅' : 'Disconnected ❌';";
-        html += "  }).catch(() => {";
-        html += "    document.getElementById('bmcu-status').textContent = 'No Response ❌';";
-        html += "  });";
-        html += "}";
-        html += "function checkBMCU() { document.getElementById('bmcu-status').textContent = 'Checking...'; updateStatus(); }";
-        html += "function resetBMCU() {";
-        html += "  if (!confirm('Reset BMCU370 device?')) return;";
-        html += "  fetch('/api/system', { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: 'action=reset_bmcu370' })";
-        html += "  .then(r => r.json()).then(d => alert(d.success ? 'Reset command sent' : 'Reset failed: ' + (d.error || 'Unknown error')))";
-        html += "  .catch(err => alert('Reset failed: ' + err));";
-        html += "}";
-        html += "function showLogs() {";
-        html += "  const logsElement = document.getElementById('logs');";
-        html += "  if (logsElement.style.display === 'none') {";
-        html += "    fetch('/api/logs').then(r => r.json()).then(d => {";
-        html += "      logsElement.textContent = JSON.stringify(d, null, 2);";
-        html += "      logsElement.style.display = 'block';";
-        html += "    }).catch(err => {";
-        html += "      logsElement.textContent = 'Failed to load logs: ' + err;";
-        html += "      logsElement.style.display = 'block';";
+        html += "  fetch('/api/wifi/status')";
+        html += "    .then(r => r.json())";
+        html += "    .then(d => {";
+        html += "      const status = d.connected ? 'Connected' : (d.ap_active ? 'Config Mode' : 'Disconnected');";
+        html += "      const statusClass = d.connected ? 'status-connected' : 'status-disconnected';";
+        html += "      document.getElementById('wifi-status').textContent = status;";
+        html += "      document.getElementById('wifi-status').className = 'status-badge ' + statusClass;";
+        html += "      document.getElementById('wifi-ssid').textContent = d.ssid || 'BMCU370-Config';";
+        html += "      document.getElementById('wifi-ip').textContent = d.ip || d.ap_ip || '--';";
+        html += "      document.getElementById('wifi-signal').textContent = d.signal ? d.signal + ' dBm' : '--';";
+        html += "    })";
+        html += "    .catch(() => {";
+        html += "      document.getElementById('wifi-status').textContent = 'Error';";
+        html += "      document.getElementById('wifi-status').className = 'status-badge status-disconnected';";
         html += "    });";
-        html += "  } else {";
-        html += "    logsElement.style.display = 'none';";
-        html += "  }";
+        
+        html += "  fetch('/api/status')";
+        html += "    .then(r => r.json())";
+        html += "    .then(d => {";
+        html += "      const bmcuStatus = d.connected ? 'Connected' : 'Disconnected';";
+        html += "      const statusClass = d.connected ? 'status-connected' : 'status-disconnected';";
+        html += "      document.getElementById('bmcu-status').textContent = bmcuStatus;";
+        html += "      document.getElementById('bmcu-status').className = 'status-badge ' + statusClass;";
+        html += "    })";
+        html += "    .catch(() => {";
+        html += "      document.getElementById('bmcu-status').textContent = 'No Response';";
+        html += "      document.getElementById('bmcu-status').className = 'status-badge status-disconnected';";
+        html += "    });";
         html += "}";
-        html += "updateStatus(); setInterval(updateStatus, 10000);";
+        
+        html += "function scanNetworks() {";
+        html += "  const loading = document.getElementById('scan-loading');";
+        html += "  const list = document.getElementById('networks-list');";
+        html += "  loading.style.display = 'block';";
+        html += "  list.innerHTML = '';";
+        
+        html += "  fetch('/api/wifi/scan')";
+        html += "    .then(r => r.json())";
+        html += "    .then(d => {";
+        html += "      loading.style.display = 'none';";
+        html += "      if (d.networks && d.networks.length > 0) {";
+        html += "        list.innerHTML = d.networks.map(n => ";
+        html += "          `<div class='network-item' onclick='selectNetwork(\\\"${n.ssid}\\\")'>`;";
+        html += "            `<div class='network-info'>`;";
+        html += "              `<div><div class='network-name'>${n.ssid}</div>`;";
+        html += "              `<div class='network-security'>${n.auth || 'Open'}</div></div>`;";
+        html += "              `<div class='network-signal'>${n.rssi} dBm</div>`;";
+        html += "            `</div>`;";
+        html += "          `</div>`";
+        html += "        ).join('');";
+        html += "        showToast(`Found ${d.networks.length} networks`, 'success');";
+        html += "      } else {";
+        html += "        list.innerHTML = '<div class=\"no-networks\">No networks found</div>';";
+        html += "        showToast('No networks found', 'error');";
+        html += "      }";
+        html += "    })";
+        html += "    .catch(err => {";
+        html += "      loading.style.display = 'none';";
+        html += "      list.innerHTML = '<div class=\"no-networks\">Scan failed</div>';";
+        html += "      showToast('Network scan failed', 'error');";
+        html += "    });";
+        html += "}";
+        
+        html += "function selectNetwork(ssid) {";
+        html += "  document.getElementById('ssid').value = ssid;";
+        html += "  showToast(`Selected network: ${ssid}`, 'success');";
+        html += "}";
+        
+        html += "function connectWiFi(event) {";
+        html += "  event.preventDefault();";
+        html += "  const ssid = document.getElementById('ssid').value;";
+        html += "  const password = document.getElementById('password').value;";
+        html += "  const loading = document.getElementById('connect-loading');";
+        
+        html += "  if (!ssid) {";
+        html += "    showToast('Please enter a network name', 'error');";
+        html += "    return;";
+        html += "  }";
+        
+        html += "  loading.style.display = 'block';";
+        html += "  const formData = new FormData();";
+        html += "  formData.append('ssid', ssid);";
+        html += "  formData.append('password', password);";
+        
+        html += "  fetch('/api/wifi/connect', { method: 'POST', body: formData })";
+        html += "    .then(r => r.json())";
+        html += "    .then(d => {";
+        html += "      loading.style.display = 'none';";
+        html += "      if (d.success) {";
+        html += "        showToast('Connected successfully! Redirecting...', 'success');";
+        html += "        setTimeout(() => {";
+        html += "          if (d.ip) window.location.href = `http://${d.ip}`;";
+        html += "          else updateStatus();";
+        html += "        }, 3000);";
+        html += "      } else {";
+        html += "        showToast(`Connection failed: ${d.error || 'Unknown error'}`, 'error');";
+        html += "      }";
+        html += "    })";
+        html += "    .catch(err => {";
+        html += "      loading.style.display = 'none';";
+        html += "      showToast('Connection request failed', 'error');";
+        html += "    });";
+        html += "}";
+        
+        html += "function checkBMCU() {";
+        html += "  document.getElementById('bmcu-status').textContent = 'Checking...';";
+        html += "  updateStatus();";
+        html += "}";
+        
+        html += "// Initialize";
+        html += "updateStatus();";
+        html += "setInterval(updateStatus, 15000);";
         html += "</script>";
         html += "</body></html>";
         
         request->send(200, "text/html", html);
     });
     
-    ESP_LOGI(TAG, "Fallback interface configured");
+    ESP_LOGI(TAG, "Enhanced fallback interface configured with full WiFi setup");
 }
 
 void WebServerManager::handleGetStatus(AsyncWebServerRequest* request) {
