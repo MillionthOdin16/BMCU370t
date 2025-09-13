@@ -4,12 +4,12 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include "config.h"
-#include "USBHostSerial.h" // Use the new USB Host library
+// #include "USBHostSerial.h" // Temporarily disabled - needs compatible version
 
 // High-level BMCU370 interface
 class BMCU370_Interface {
 private:
-    USBHostSerial bmcu_serial; // Directly use the USB Host Serial library
+    // USBHostSerial bmcu_serial; // Temporarily disabled - needs compatible version
     JsonDocument status_cache;
     JsonDocument config_cache;
     

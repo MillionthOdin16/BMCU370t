@@ -1033,9 +1033,9 @@ void WebServerManager::logRequest(AsyncWebServerRequest* request, const String& 
 void WebServerManager::printServerInfo() {
     ESP_LOGI(TAG, "=== Web Server Information ===");
     ESP_LOGI(TAG, "Port: %d", WEB_SERVER_PORT);
-    ESP_LOGI(TAG, "API Requests: %lu", api_request_count);
-    ESP_LOGI(TAG, "WebSocket Messages: %lu", websocket_message_count);
-    ESP_LOGI(TAG, "Errors: %lu", error_count);
+    ESP_LOGI(TAG, "API Requests: %u", api_request_count);
+    ESP_LOGI(TAG, "WebSocket Messages: %u", websocket_message_count);
+    ESP_LOGI(TAG, "Errors: %u", error_count);
     ESP_LOGI(TAG, "Connected WebSocket Clients: %d", websocket.count());
     ESP_LOGI(TAG, "==============================");
 }

@@ -13,21 +13,22 @@ BMCU370_Interface::~BMCU370_Interface() {
 }
 
 bool BMCU370_Interface::init() {
-    ESP_LOGI(TAG, "Initializing BMCU370 interface with USBHostSerial");
+    ESP_LOGI(TAG, "Initializing BMCU370 interface (USB temporarily disabled)");
     
-    // The USBHostSerial library is initialized when begin() is called.
-    // We can pass the VID/PID of the device we are looking for.
-    bmcu_serial.begin(BMCU370_VID, BMCU370_PID);
+    // TODO: Re-enable USB Host functionality when compatible library is available
+    // bmcu_serial.begin(BMCU370_VID, BMCU370_PID);
 
     // Initialize JSON documents
     status_cache.clear();
     config_cache.clear();
     
-    ESP_LOGI(TAG, "BMCU370 interface initialized. Waiting for device connection...");
+    ESP_LOGI(TAG, "BMCU370 interface initialized. USB host functionality temporarily disabled.");
     return true;
 }
 
 void BMCU370_Interface::handleUSB() {
+    // TODO: Re-enable USB Host functionality when compatible library is available
+    /*
     // This method should be called in the main loop to handle USB events.
     bmcu_serial.task();
 
@@ -47,9 +48,15 @@ void BMCU370_Interface::handleUSB() {
             config_cache.clear();
         }
     }
+    */
 }
 
 bool BMCU370_Interface::sendCommandAndGetResponse(const String& cmd, String& response, uint32_t timeout_ms) {
+    // TODO: Re-enable when USB Host functionality is available
+    last_error = "USB Host functionality temporarily disabled";
+    return false;
+    
+    /*
     if (!device_online) {
         last_error = "Device not connected";
         return false;
@@ -81,6 +88,7 @@ bool BMCU370_Interface::sendCommandAndGetResponse(const String& cmd, String& res
     }
 
     ESP_LOGW(TAG, "Timeout waiting for response to command: %s", cmd.c_str());
+    */
     last_error = "Timeout waiting for response from BMCU";
     error_count++;
     return false;
@@ -286,9 +294,9 @@ String BMCU370_Interface::getConnectionStatus() const {
 void BMCU370_Interface::printDebugInfo() {
     ESP_LOGI(TAG, "=== BMCU370 Interface Debug Info ===");
     ESP_LOGI(TAG, "Connection Status: %s", getConnectionStatus().c_str());
-    ESP_LOGI(TAG, "Commands Sent: %lu", command_count);
-    ESP_LOGI(TAG, "Errors: %lu", error_count);
-    ESP_LOGI(TAG, "Last Update: %lu ms ago", millis() - last_status_update);
+    ESP_LOGI(TAG, "Commands Sent: %u", command_count);
+    ESP_LOGI(TAG, "Errors: %u", error_count);
+    ESP_LOGI(TAG, "Last Update: %u ms ago", (uint32_t)(millis() - last_status_update));
     if (!last_error.isEmpty()) {
         ESP_LOGI(TAG, "Last Error: %s", last_error.c_str());
     }

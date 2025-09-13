@@ -116,7 +116,7 @@ void WiFiManager::startConfigMode(uint32_t timeout_ms) {
         startAccessPoint();
     }
     
-    ESP_LOGI(TAG, "Configuration mode started (timeout: %lu ms)", timeout_ms);
+    ESP_LOGI(TAG, "Configuration mode started (timeout: %u ms)", (uint32_t)timeout_ms);
 }
 
 void WiFiManager::stopConfigMode() {
@@ -193,7 +193,6 @@ bool WiFiManager::attemptConnection(const String& ssid, const String& password, 
     // Begin connection
     WiFi.begin(ssid.c_str(), password.c_str());
     
-    unsigned long start_time = millis();
     uint32_t retry_count = 0;
     const uint32_t max_retries = timeout_ms / 500;
     
@@ -203,7 +202,7 @@ bool WiFiManager::attemptConnection(const String& ssid, const String& password, 
         
         // Log progress every 2 seconds (4 retries)
         if (retry_count % 4 == 0) {
-            ESP_LOGI(TAG, "Connecting... (%lu/%lu)", retry_count, max_retries);
+            ESP_LOGI(TAG, "Connecting... (%u/%u)", retry_count, max_retries);
             
             // Check for specific error conditions
             wl_status_t status = WiFi.status();

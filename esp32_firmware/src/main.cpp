@@ -22,6 +22,7 @@ unsigned long last_status_update = 0;
 unsigned long last_heartbeat = 0;
 unsigned long last_history_save = 0;
 bool system_ready = false;
+bool previous_connection_state = false; // Track previous BMCU370 connection state
 
 void setup() {
     Serial.begin(115200);
@@ -188,9 +189,10 @@ void loop() {
     // Update BMCU370 status periodically
     if (system_ready && (current_time - last_status_update >= STATUS_UPDATE_INTERVAL_MS)) {
         bool connected = bmcu_interface.updateStatus();
-        if (connected != bmcu_interface.wasConnectedLastUpdate()) {
+        if (connected != previous_connection_state) {
             Serial.print("BMCU370 connection status changed: ");
             Serial.println(connected ? "CONNECTED" : "DISCONNECTED");
+            previous_connection_state = connected;
         }
         
         // Add data to historical tracking if connected

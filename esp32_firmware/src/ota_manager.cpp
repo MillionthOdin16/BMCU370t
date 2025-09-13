@@ -197,8 +197,8 @@ void OTAManager::setState(OTAState state) {
             last_error = "";
         } else if (state == OTAState::SUCCESS || state == OTAState::ERROR) {
             unsigned long duration = millis() - start_time;
-            ESP_LOGI(TAG, "OTA update %s after %lu ms", 
-                    state == OTAState::SUCCESS ? "completed" : "failed", duration);
+            ESP_LOGI(TAG, "OTA update %s after %u ms", 
+                    state == OTAState::SUCCESS ? "completed" : "failed", (uint32_t)duration);
         }
     }
 }
