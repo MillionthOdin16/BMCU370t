@@ -52,32 +52,15 @@ void setup() {
     
     bool littlefs_mounted = false;
     
-    // Attempt 1: Try normal mount
-    Serial.println("Attempt 1: Normal LittleFS mount...");
-    littlefs_mounted = LittleFS.begin(false);
-    
+    // Mount LittleFS without formatting
+    Serial.println("Attempting to mount LittleFS...");
+    littlefs_mounted = LittleFS.begin(false); // `false` = do not format if mount fails
+
     if (!littlefs_mounted) {
-        // Attempt 2: Force format and mount
-        Serial.println("Attempt 2: Format LittleFS and retry...");
-        Serial.println("WARNING: This will erase all existing web files");
-        
-        if (LittleFS.format()) {
-            Serial.println("LittleFS format completed successfully");
-            delay(1000); // Allow flash to settle
-            
-            littlefs_mounted = LittleFS.begin(false);
-            if (littlefs_mounted) {
-                Serial.println("LittleFS mount successful after format");
-            }
-        } else {
-            Serial.println("ERROR: LittleFS format failed");
-        }
-    }
-    
-    if (!littlefs_mounted) {
-        // Attempt 3: Try forced mount with formatting enabled
-        Serial.println("Attempt 3: Force mount with format_if_failed=true...");
-        littlefs_mounted = LittleFS.begin(true);
+        Serial.println("ERROR: Failed to mount LittleFS partition.");
+        Serial.println("The web interface files may be missing or the partition may be corrupt.");
+        Serial.println("The system will continue in fallback mode.");
+        Serial.println("To restore the web interface, re-flash the LittleFS binary.");
     }
     
     if (littlefs_mounted) {
