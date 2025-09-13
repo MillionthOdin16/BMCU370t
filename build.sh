@@ -19,9 +19,13 @@ fi
 mkdir -p build-output
 
 echo ""
+echo "Cleaning BMCU370 build environment..."
+echo "=============================="
+pio run --target clean --environment genericCH32V203C8T6
+echo ""
 echo "Building BMCU370 firmware..."
 echo "=============================="
-pio run --environment genericCH32V203C8T6
+pio run -v --environment genericCH32V203C8T6
 
 if [ $? -eq 0 ]; then
     echo "✅ BMCU370 build successful"
