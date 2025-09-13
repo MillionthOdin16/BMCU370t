@@ -48,7 +48,7 @@ void setup() {
     
     // Initialize LittleFS filesystem with comprehensive error handling
     Serial.println("Initializing LittleFS filesystem...");
-    Serial.printf("Expected partition: 0x310000-0x3D0000 (768KB)\n");
+    Serial.printf("Expected partition: 0x310000-0x3E0000 (832KB)\n");
     
     bool littlefs_mounted = false;
     

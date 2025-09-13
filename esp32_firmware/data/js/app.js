@@ -686,6 +686,7 @@ class BMCU370WebInterface {
             const ssidElement = document.getElementById('wifiSSID');
             const ipElement = document.getElementById('wifiIP');
             const signalElement = document.getElementById('wifiSignal');
+            const networkHelpElement = document.getElementById('networkHelp');
             
             if (result.connected) {
                 statusElement.textContent = 'Connected';
@@ -693,6 +694,7 @@ class BMCU370WebInterface {
                 ssidElement.textContent = result.ssid || '--';
                 ipElement.textContent = result.ip || '--';
                 signalElement.textContent = result.signal ? `${result.signal} dBm` : '--';
+                networkHelpElement.style.display = 'none';
             } else {
                 if (result.ap_active) {
                     statusElement.textContent = 'Config Mode (AP)';
@@ -700,12 +702,14 @@ class BMCU370WebInterface {
                     ssidElement.textContent = 'BMCU370-Config';
                     ipElement.textContent = result.ap_ip || '--';
                     signalElement.textContent = '--';
+                    networkHelpElement.style.display = 'block';
                 } else {
                     statusElement.textContent = 'Disconnected';
                     statusElement.className = 'status-badge offline';
                     ssidElement.textContent = '--';
                     ipElement.textContent = '--';
                     signalElement.textContent = '--';
+                    networkHelpElement.style.display = 'none';
                 }
             }
         }
