@@ -30,6 +30,9 @@
             <button class="tab-button" data-tab="network">
                 <i class="fas fa-wifi"></i> Network
             </button>
+            <button class="tab-button" data-tab="firmware">
+                <i class="fas fa-upload"></i> Firmware
+            </button>
         </nav>
 
         <main class="main-content">
@@ -247,6 +250,124 @@
                         <div class="connect-info">
                             <p><i class="fas fa-lightbulb"></i> <strong>Tip:</strong> 
                             After connecting successfully, the device will remember your network and connect automatically in the future.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Firmware Tab -->
+            <div class="tab-content" id="firmware">
+                <div class="firmware-grid">
+                    <div class="card">
+                        <h3><i class="fas fa-microchip"></i> Current Firmware</h3>
+                        <div class="firmware-info">
+                            <div class="info-item">
+                                <label>Version:</label>
+                                <span id="firmwareVersion">1.0.0</span>
+                            </div>
+                            <div class="info-item">
+                                <label>Build Date:</label>
+                                <span id="buildDate">--</span>
+                            </div>
+                            <div class="info-item">
+                                <label>Flash Usage:</label>
+                                <span id="flashUsage">--</span>
+                            </div>
+                            <div class="info-item">
+                                <label>Free Heap:</label>
+                                <span id="freeHeap">--</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h3><i class="fas fa-upload"></i> Upload New Firmware</h3>
+                        <div class="upload-section">
+                            <div class="upload-area" id="uploadArea">
+                                <div class="upload-content">
+                                    <i class="fas fa-cloud-upload-alt"></i>
+                                    <p>Drag and drop firmware file here</p>
+                                    <p class="upload-hint">or click to select file</p>
+                                    <input type="file" id="firmwareFile" accept=".bin" style="display: none;">
+                                </div>
+                            </div>
+                            
+                            <div class="file-info" id="fileInfo" style="display: none;">
+                                <div class="file-details">
+                                    <i class="fas fa-file"></i>
+                                    <span id="fileName">--</span>
+                                    <span id="fileSize">--</span>
+                                </div>
+                                <button class="btn btn-danger btn-small" id="clearFile">
+                                    <i class="fas fa-times"></i> Remove
+                                </button>
+                            </div>
+                            
+                            <div class="upload-controls">
+                                <button class="btn btn-primary" id="uploadFirmware" disabled>
+                                    <i class="fas fa-upload"></i> Upload Firmware
+                                </button>
+                                <button class="btn btn-secondary" id="abortUpload" style="display: none;">
+                                    <i class="fas fa-stop"></i> Abort
+                                </button>
+                            </div>
+                            
+                            <div class="upload-progress" id="uploadProgress" style="display: none;">
+                                <div class="progress-bar">
+                                    <div class="progress-fill" id="progressFill"></div>
+                                </div>
+                                <div class="progress-text">
+                                    <span id="progressPercent">0%</span>
+                                    <span id="progressStatus">Preparing...</span>
+                                </div>
+                            </div>
+                            
+                            <div class="upload-warnings">
+                                <div class="warning-box">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                    <strong>Warning:</strong> Do not power off or disconnect the device during firmware update. 
+                                    The device will restart automatically after successful update.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h3><i class="fas fa-network-wired"></i> Network Update (ArduinoOTA)</h3>
+                        <div class="ota-section">
+                            <div class="ota-info">
+                                <div class="info-item">
+                                    <label>OTA Status:</label>
+                                    <span id="otaStatus" class="status-badge">Idle</span>
+                                </div>
+                                <div class="info-item">
+                                    <label>Hostname:</label>
+                                    <span>BMCU370-ESP32</span>
+                                </div>
+                                <div class="info-item">
+                                    <label>Port:</label>
+                                    <span>3232</span>
+                                </div>
+                                <div class="info-item">
+                                    <label>Password:</label>
+                                    <span>bmcu370ota</span>
+                                </div>
+                            </div>
+                            
+                            <div class="ota-help">
+                                <p><i class="fas fa-info-circle"></i> 
+                                <strong>Network OTA:</strong> Use Arduino IDE or PlatformIO to upload firmware over WiFi.</p>
+                                <details>
+                                    <summary>Arduino IDE Instructions</summary>
+                                    <ol>
+                                        <li>Ensure your computer is on the same network as the ESP32</li>
+                                        <li>In Arduino IDE, go to Tools → Port</li>
+                                        <li>Select "BMCU370-ESP32 at [IP address]"</li>
+                                        <li>Upload your sketch normally</li>
+                                        <li>Enter password: <code>bmcu370ota</code></li>
+                                    </ol>
+                                </details>
+                            </div>
                         </div>
                     </div>
                 </div>

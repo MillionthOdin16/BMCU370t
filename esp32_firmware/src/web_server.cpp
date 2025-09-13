@@ -333,6 +333,44 @@ void WebServerManager::setupFallbackInterface() {
         html += "</div>";
         html += "</div>";
         
+        // OTA Firmware Update
+        html += "<div class='card'>";
+        html += "<div class='section'>";
+        html += "<h3><i class='fas fa-upload'></i> Firmware Update</h3>";
+        html += "<div class='status info'>";
+        html += "<strong>OTA Status:</strong> <span id='ota-status'>Checking...</span>";
+        html += "</div>";
+        html += "<div class='form-group'>";
+        html += "<label for='firmware-file'>Select Firmware File (.bin):</label>";
+        html += "<input type='file' id='firmware-file' accept='.bin' class='form-control'>";
+        html += "</div>";
+        html += "<div id='file-info' style='display: none; margin: 10px 0; padding: 10px; background: #e8f5e8; border-radius: 5px;'>";
+        html += "<span id='file-name'></span> (<span id='file-size'></span>)";
+        html += "</div>";
+        html += "<div class='upload-controls'>";
+        html += "<button class='btn btn-success' id='upload-btn' onclick='uploadFirmware()' disabled>";
+        html += "<i class='fas fa-upload'></i> Upload Firmware";
+        html += "</button>";
+        html += "<button class='btn btn-secondary' id='abort-btn' onclick='abortUpload()' style='display: none;'>";
+        html += "<i class='fas fa-stop'></i> Abort";
+        html += "</button>";
+        html += "</div>";
+        html += "<div id='upload-progress' style='display: none; margin-top: 15px;'>";
+        html += "<div style='background: #ecf0f1; border-radius: 10px; overflow: hidden; height: 20px; margin-bottom: 10px;'>";
+        html += "<div id='progress-bar' style='height: 100%; background: linear-gradient(45deg, #3498db, #2980b9); width: 0%; transition: width 0.3s;'></div>";
+        html += "</div>";
+        html += "<div style='display: flex; justify-content: space-between;'>";
+        html += "<span id='progress-percent'>0%</span>";
+        html += "<span id='progress-status'>Ready</span>";
+        html += "</div>";
+        html += "</div>";
+        html += "<div style='background: #fff3cd; padding: 10px; border-radius: 5px; margin-top: 10px; color: #856404;'>";
+        html += "<i class='fas fa-exclamation-triangle'></i> ";
+        html += "<strong>Warning:</strong> Do not power off during firmware update!";
+        html += "</div>";
+        html += "</div>";
+        html += "</div>";
+        
         // Troubleshooting
         html += "<div class='card'>";
         html += "<div class='section'>";
@@ -492,9 +530,104 @@ void WebServerManager::setupFallbackInterface() {
         html += "  updateStatus();";
         html += "}";
         
+        // OTA functionality
+        html += "let selectedFile = null;";
+        html += "let uploadInProgress = false;";
+        
+        html += "document.getElementById('firmware-file').addEventListener('change', function(e) {";
+        html += "  const file = e.target.files[0];";
+        html += "  if (file) {";
+        html += "    if (!file.name.endsWith('.bin')) {";
+        html += "      showToast('Please select a .bin firmware file', 'error');";
+        html += "      return;";
+        html += "    }";
+        html += "    if (file.size > 2 * 1024 * 1024) {";
+        html += "      showToast('File too large. Maximum size is 2MB', 'error');";
+        html += "      return;";
+        html += "    }";
+        html += "    selectedFile = file;";
+        html += "    document.getElementById('file-name').textContent = file.name;";
+        html += "    document.getElementById('file-size').textContent = (file.size / 1024).toFixed(1) + ' KB';";
+        html += "    document.getElementById('file-info').style.display = 'block';";
+        html += "    document.getElementById('upload-btn').disabled = false;";
+        html += "    showToast('Firmware file selected', 'success');";
+        html += "  }";
+        html += "});";
+        
+        html += "function uploadFirmware() {";
+        html += "  if (!selectedFile || uploadInProgress) return;";
+        html += "  uploadInProgress = true;";
+        html += "  const formData = new FormData();";
+        html += "  formData.append('firmware', selectedFile);";
+        html += "  document.getElementById('upload-progress').style.display = 'block';";
+        html += "  document.getElementById('upload-btn').style.display = 'none';";
+        html += "  document.getElementById('abort-btn').style.display = 'inline-block';";
+        html += "  updateProgress(0, 'Starting upload...');";
+        
+        html += "  fetch('/api/ota/upload', { method: 'POST', body: formData })";
+        html += "    .then(r => r.json())";
+        html += "    .then(d => {";
+        html += "      if (d.status === 'success' || d.success) {";
+        html += "        updateProgress(100, 'Upload complete! Restarting...');";
+        html += "        showToast('Firmware uploaded successfully! Device restarting.', 'success');";
+        html += "        setTimeout(() => window.location.reload(), 10000);";
+        html += "      } else {";
+        html += "        throw new Error(d.error || 'Upload failed');";
+        html += "      }";
+        html += "    })";
+        html += "    .catch(err => {";
+        html += "      updateProgress(0, 'Upload failed');";
+        html += "      showToast('Upload failed: ' + err.message, 'error');";
+        html += "      resetUploadUI();";
+        html += "    });";
+        html += "}";
+        
+        html += "function abortUpload() {";
+        html += "  fetch('/api/ota/abort', { method: 'POST' })";
+        html += "    .then(() => {";
+        html += "      showToast('Upload aborted', 'warning');";
+        html += "      resetUploadUI();";
+        html += "    })";
+        html += "    .catch(err => console.error('Abort failed:', err));";
+        html += "}";
+        
+        html += "function updateProgress(percent, status) {";
+        html += "  document.getElementById('progress-bar').style.width = percent + '%';";
+        html += "  document.getElementById('progress-percent').textContent = percent + '%';";
+        html += "  document.getElementById('progress-status').textContent = status;";
+        html += "}";
+        
+        html += "function resetUploadUI() {";
+        html += "  uploadInProgress = false;";
+        html += "  document.getElementById('upload-progress').style.display = 'none';";
+        html += "  document.getElementById('upload-btn').style.display = 'inline-block';";
+        html += "  document.getElementById('abort-btn').style.display = 'none';";
+        html += "  updateProgress(0, 'Ready');";
+        html += "}";
+        
+        html += "function updateOTAStatus() {";
+        html += "  fetch('/api/ota/status')";
+        html += "    .then(r => r.json())";
+        html += "    .then(d => {";
+        html += "      let status = 'Idle';";
+        html += "      switch(parseInt(d.state)) {";
+        html += "        case 1: status = 'Starting'; break;";
+        html += "        case 2: status = 'In Progress (' + d.progress + '%)'; break;";
+        html += "        case 3: status = 'Success'; break;";
+        html += "        case 4: status = 'Error'; break;";
+        html += "      }";
+        html += "      document.getElementById('ota-status').textContent = status;";
+        html += "    })";
+        html += "    .catch(() => {";
+        html += "      document.getElementById('ota-status').textContent = 'Unknown';";
+        html += "    });";
+        html += "}";
+        
         html += "// Initialize";
         html += "updateStatus();";
+        html += "updateOTAStatus();";
         html += "setInterval(updateStatus, 15000);";
+        html += "setInterval(updateOTAStatus, 5000);";
         html += "</script>";
         html += "</body></html>";
         

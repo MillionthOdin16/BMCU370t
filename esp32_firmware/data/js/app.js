@@ -34,6 +34,9 @@ class BMCU370WebInterface {
         // Network controls
         this.setupNetworkControls();
 
+        // Firmware controls
+        this.setupFirmwareControls();
+
         // Toast close
         document.getElementById('toastClose').addEventListener('click', () => {
             this.hideToast();
@@ -93,6 +96,50 @@ class BMCU370WebInterface {
         });
     }
 
+    setupFirmwareControls() {
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('firmwareFile');
+        const uploadButton = document.getElementById('uploadFirmware');
+        const abortButton = document.getElementById('abortUpload');
+        const clearButton = document.getElementById('clearFile');
+
+        // File input and drag-and-drop
+        uploadArea.addEventListener('click', () => fileInput.click());
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                this.handleFileSelection(files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                this.handleFileSelection(e.target.files[0]);
+            }
+        });
+
+        clearButton.addEventListener('click', () => {
+            this.clearSelectedFile();
+        });
+
+        uploadButton.addEventListener('click', () => {
+            this.uploadFirmware();
+        });
+
+        abortButton.addEventListener('click', () => {
+            this.abortUpload();
+        });
+    }
+
     switchTab(tabName) {
         // Update tab buttons
         document.querySelectorAll('.tab-button').forEach(button => {
@@ -113,6 +160,8 @@ class BMCU370WebInterface {
             this.refreshLogs();
         } else if (tabName === 'network') {
             this.updateNetworkStatus();
+        } else if (tabName === 'firmware') {
+            this.updateFirmwareInfo();
         }
     }
 
@@ -660,6 +709,179 @@ class BMCU370WebInterface {
                 }
             }
         }
+    }
+
+    // Firmware management methods
+    async updateFirmwareInfo() {
+        try {
+            // Update OTA status
+            const otaResponse = await fetch('/api/ota/status');
+            if (otaResponse.ok) {
+                const otaData = await otaResponse.json();
+                this.updateOTAStatus(otaData);
+            }
+            
+            // Update system info for firmware tab
+            const statusResponse = await fetch('/api/status');
+            if (statusResponse.ok) {
+                const statusData = await statusResponse.json();
+                this.updateSystemInfo(statusData);
+            }
+        } catch (error) {
+            console.error('Failed to update firmware info:', error);
+        }
+    }
+
+    updateOTAStatus(otaData) {
+        const statusElement = document.getElementById('otaStatus');
+        let statusText = 'Idle';
+        let statusClass = 'idle';
+
+        switch (parseInt(otaData.state)) {
+            case 0: // IDLE
+                statusText = 'Idle';
+                statusClass = 'idle';
+                break;
+            case 1: // STARTING
+                statusText = 'Starting';
+                statusClass = 'warning';
+                break;
+            case 2: // IN_PROGRESS
+                statusText = `Updating (${otaData.progress}%)`;
+                statusClass = 'info';
+                break;
+            case 3: // SUCCESS
+                statusText = 'Success';
+                statusClass = 'success';
+                break;
+            case 4: // ERROR
+                statusText = 'Error';
+                statusClass = 'error';
+                break;
+        }
+
+        statusElement.textContent = statusText;
+        statusElement.className = `status-badge ${statusClass}`;
+
+        if (otaData.error && otaData.error !== '') {
+            this.showToast(`OTA Error: ${otaData.error}`, 'error');
+        }
+    }
+
+    updateSystemInfo(statusData) {
+        // Update build date and other system info
+        if (statusData.system) {
+            const buildDateElement = document.getElementById('buildDate');
+            const flashUsageElement = document.getElementById('flashUsage');
+            const freeHeapElement = document.getElementById('freeHeap');
+            
+            if (buildDateElement) {
+                buildDateElement.textContent = statusData.system.build_date || '--';
+            }
+            if (flashUsageElement && statusData.system.flash_usage) {
+                flashUsageElement.textContent = `${statusData.system.flash_usage}%`;
+            }
+            if (freeHeapElement && statusData.system.free_heap) {
+                freeHeapElement.textContent = `${(statusData.system.free_heap / 1024).toFixed(1)} KB`;
+            }
+        }
+    }
+
+    handleFileSelection(file) {
+        if (!file.name.endsWith('.bin')) {
+            this.showToast('Please select a .bin firmware file', 'error');
+            return;
+        }
+
+        if (file.size > 2 * 1024 * 1024) { // 2MB limit
+            this.showToast('File too large. Maximum size is 2MB', 'error');
+            return;
+        }
+
+        this.selectedFile = file;
+        
+        // Show file info
+        document.getElementById('fileName').textContent = file.name;
+        document.getElementById('fileSize').textContent = `${(file.size / 1024).toFixed(1)} KB`;
+        document.getElementById('fileInfo').style.display = 'flex';
+        document.getElementById('uploadFirmware').disabled = false;
+        
+        this.showToast('Firmware file selected', 'success');
+    }
+
+    clearSelectedFile() {
+        this.selectedFile = null;
+        document.getElementById('fileInfo').style.display = 'none';
+        document.getElementById('uploadFirmware').disabled = true;
+        document.getElementById('firmwareFile').value = '';
+    }
+
+    async uploadFirmware() {
+        if (!this.selectedFile) {
+            this.showToast('Please select a firmware file first', 'error');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('firmware', this.selectedFile);
+
+        // Show progress UI
+        document.getElementById('uploadProgress').style.display = 'block';
+        document.getElementById('uploadFirmware').style.display = 'none';
+        document.getElementById('abortUpload').style.display = 'inline-flex';
+        
+        this.updateUploadProgress(0, 'Starting upload...');
+        
+        try {
+            const response = await fetch('/api/ota/upload', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (response.ok) {
+                this.updateUploadProgress(100, 'Upload complete! Device restarting...');
+                this.showToast('Firmware uploaded successfully! Device will restart.', 'success');
+                
+                // Reset UI after delay
+                setTimeout(() => {
+                    this.resetUploadUI();
+                    // Reconnect after restart
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 10000);
+                }, 3000);
+            } else {
+                const error = await response.json();
+                throw new Error(error.error || 'Upload failed');
+            }
+        } catch (error) {
+            this.updateUploadProgress(0, 'Upload failed');
+            this.showToast(`Upload failed: ${error.message}`, 'error');
+            this.resetUploadUI();
+        }
+    }
+
+    updateUploadProgress(percent, status) {
+        document.getElementById('progressFill').style.width = `${percent}%`;
+        document.getElementById('progressPercent').textContent = `${percent}%`;
+        document.getElementById('progressStatus').textContent = status;
+    }
+
+    async abortUpload() {
+        try {
+            await fetch('/api/ota/abort', { method: 'POST' });
+            this.showToast('Upload aborted', 'warning');
+        } catch (error) {
+            console.error('Failed to abort upload:', error);
+        }
+        this.resetUploadUI();
+    }
+
+    resetUploadUI() {
+        document.getElementById('uploadProgress').style.display = 'none';
+        document.getElementById('uploadFirmware').style.display = 'inline-flex';
+        document.getElementById('abortUpload').style.display = 'none';
+        this.updateUploadProgress(0, 'Preparing...');
     }
 
     confirmAction(message, callback) {

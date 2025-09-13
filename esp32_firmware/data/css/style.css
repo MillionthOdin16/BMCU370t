@@ -636,6 +636,206 @@ body {
     opacity: 1;
 }
 
+/* Firmware Tab */
+.firmware-grid {
+    display: grid;
+    gap: 20px;
+}
+
+.firmware-info {
+    display: grid;
+    gap: 10px;
+}
+
+.upload-section {
+    display: grid;
+    gap: 20px;
+}
+
+.upload-area {
+    border: 3px dashed #bdc3c7;
+    border-radius: 12px;
+    padding: 40px 20px;
+    text-align: center;
+    background: #f8f9fa;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    position: relative;
+}
+
+.upload-area:hover,
+.upload-area.dragover {
+    border-color: #3498db;
+    background: #ecf0f1;
+    transform: scale(1.02);
+}
+
+.upload-content i {
+    font-size: 3rem;
+    color: #bdc3c7;
+    margin-bottom: 15px;
+}
+
+.upload-content p {
+    margin: 8px 0;
+    color: #7f8c8d;
+}
+
+.upload-hint {
+    font-size: 0.9rem;
+    font-style: italic;
+}
+
+.file-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    background: #e8f5e8;
+    border: 1px solid #27ae60;
+    border-radius: 8px;
+}
+
+.file-details {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.file-details i {
+    color: #27ae60;
+    font-size: 1.2rem;
+}
+
+.btn-small {
+    padding: 6px 12px;
+    font-size: 0.9rem;
+}
+
+.upload-controls {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+.upload-progress {
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 20px;
+    background: #ecf0f1;
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 10px;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(45deg, #3498db, #2980b9);
+    width: 0%;
+    transition: width 0.3s ease;
+    position: relative;
+}
+
+.progress-fill::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: 0;
+    background: linear-gradient(
+        -45deg,
+        rgba(255, 255, 255, 0.2) 25%,
+        transparent 25%,
+        transparent 50%,
+        rgba(255, 255, 255, 0.2) 50%,
+        rgba(255, 255, 255, 0.2) 75%,
+        transparent 75%,
+        transparent
+    );
+    background-size: 50px 50px;
+    animation: progress-stripes 1s linear infinite;
+}
+
+@keyframes progress-stripes {
+    0% { background-position: 0 0; }
+    100% { background-position: 50px 50px; }
+}
+
+.progress-text {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 500;
+}
+
+.upload-warnings {
+    margin-top: 15px;
+}
+
+.warning-box {
+    padding: 15px;
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 8px;
+    color: #856404;
+}
+
+.warning-box i {
+    color: #f39c12;
+    margin-right: 8px;
+}
+
+.ota-section {
+    display: grid;
+    gap: 20px;
+}
+
+.ota-info {
+    display: grid;
+    gap: 10px;
+}
+
+.ota-help {
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border-left: 4px solid #3498db;
+}
+
+.ota-help details {
+    margin-top: 10px;
+}
+
+.ota-help summary {
+    cursor: pointer;
+    font-weight: 500;
+    color: #2c3e50;
+    margin-bottom: 10px;
+}
+
+.ota-help ol {
+    margin-left: 20px;
+    margin-top: 10px;
+}
+
+.ota-help li {
+    margin: 5px 0;
+}
+
+.ota-help code {
+    background: #e9ecef;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
     .container {
