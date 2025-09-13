@@ -1,5 +1,33 @@
 # ESP32-S3 N4R2 Flashing Instructions (4MB Flash + 2MB PSRAM)
 
+## Critical Flash Size Fix for ESP32-S3 N4R2
+
+### Issue: Binary Built for 8MB Flash on 4MB Hardware
+If you see this error:
+```
+E (226) spi_flash: Detected size(4096k) smaller than the size in the binary image header(8192k). Probe failed.
+assert failed: do_core_init startup.c:328 (flash_ret == ESP_OK)
+```
+
+This means the firmware was compiled with 8MB flash settings but your hardware only has 4MB.
+
+### Solution: Force Flash Size During Upload
+Use esptool with explicit 4MB flash size specification:
+```bash
+# CRITICAL: Force 4MB flash size during upload
+esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \
+  write_flash --flash_size 4MB --flash_mode dio --flash_freq 80m \
+  0x0 bootloader.bin 0x8000 partitions.bin 0x10000 firmware.bin
+```
+
+### Alternative: Use Detect Mode
+```bash
+# Let esptool detect and override flash size
+esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \
+  write_flash --flash_size detect --flash_mode dio --flash_freq 80m \
+  0x0 bootloader.bin 0x8000 partitions.bin 0x10000 firmware.bin
+```
+
 ## Hardware Compatibility
 This firmware is specifically optimized for ESP32-S3 N4R2 variant:
 - **N4**: 4MB NAND Flash Memory (confirmed by your chip)
@@ -26,31 +54,37 @@ The firmware now includes ESP32-S3 N4R2 specific optimizations:
 ### Solution 2: Flash with ESP32-S3 N4R2 Optimized Parameters
 For ESP32-S3 N4R2, use these specifically tuned parameters:
 ```bash
-# Complete firmware flash (recommended for N4R2)
+# Complete firmware flash with forced 4MB detection
 esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \
-  write_flash --flash_mode dio --flash_freq 80m --flash_size 4MB \
+  write_flash --flash_size 4MB --flash_mode dio --flash_freq 80m \
+  0x0 bootloader.bin 0x8000 partitions.bin 0x10000 firmware.bin
+
+# Alternative with auto-detection override
+esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \
+  write_flash --flash_size detect --flash_mode dio --flash_freq 80m \
   0x0 bootloader.bin 0x8000 partitions.bin 0x10000 firmware.bin
 ```
 
 ### Solution 3: Stage Flashing for Problematic Connections
 1. **Flash main firmware first**:
    ```bash
+   # Force 4MB flash size recognition
    esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \
-     write_flash --flash_mode dio --flash_freq 80m \
+     write_flash --flash_size 4MB --flash_mode dio --flash_freq 80m \
      0x10000 firmware.bin
    ```
 
 2. **Flash LittleFS separately** (if needed):
    ```bash
    esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 460800 \
-     write_flash --flash_mode dio 0x310000 littlefs.bin
+     write_flash --flash_size 4MB --flash_mode dio 0x310000 littlefs.bin
    ```
 
 ### Solution 4: Lower Baud Rate for Stability
 If flashing still fails, reduce baud rate:
 ```bash
 esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 115200 \
-  write_flash --flash_mode dio --flash_freq 80m --flash_size 4MB \
+  write_flash --flash_size 4MB --flash_mode dio --flash_freq 80m \
   0x0 bootloader.bin 0x8000 partitions.bin 0x10000 firmware.bin
 ```
 
