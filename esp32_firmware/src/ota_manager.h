@@ -7,6 +7,7 @@
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include <Update.h>
+#include <functional>
 
 // OTA configuration
 #define OTA_HOSTNAME           "BMCU370-ESP32"
@@ -35,6 +36,9 @@ private:
     bool web_upload_active;
     AsyncWebServerRequest* current_request;
     
+    // Progress callback
+    std::function<void(int)> on_progress_callback;
+
 public:
     OTAManager();
     
@@ -47,11 +51,14 @@ public:
     OTAState getState() const { return current_state; }
     int getProgress() const { return progress_percent; }
     String getLastError() const { return last_error; }
-    bool isActive() const { return current_state == OTAState::IN_PROGRESS; }
+    bool isActive() const { return current_state == OTAState::IN_PROGRESS || current_state == OTAState::STARTING; }
     
     // Web server integration
     void setupWebHandlers(AsyncWebServer* server);
     
+    // Callbacks
+    void onProgress(std::function<void(int)> callback);
+
     // Manual control
     bool startOTA();
     void abortOTA();
@@ -60,7 +67,7 @@ private:
     // ArduinoOTA callbacks
     static void onStart();
     static void onEnd();
-    static void onProgress(unsigned int progress, unsigned int total);
+    static void onProgressCb(unsigned int progress, unsigned int total);
     static void onError(ota_error_t error);
     
     // Web upload handlers
