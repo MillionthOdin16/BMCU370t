@@ -26,7 +26,6 @@ pio run --environment genericCH32V203C8T6
 if [ $? -eq 0 ]; then
     echo "✅ BMCU370 build successful"
     cp .pio/build/genericCH32V203C8T6/firmware.bin build-output/bmcu370_firmware.bin
-    cp .pio/build/genericCH32V203C8T6/firmware.hex build-output/bmcu370_firmware.hex
     cp .pio/build/genericCH32V203C8T6/firmware.elf build-output/bmcu370_firmware.elf
 else
     echo "❌ BMCU370 build failed"
@@ -89,7 +88,6 @@ Git Branch: $(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "Unknown")
 
 Files Built:
 - bmcu370_firmware.bin - BMCU370 main firmware (DFU flashable)
-- bmcu370_firmware.hex - BMCU370 firmware (Intel HEX format)
 - bmcu370_firmware.elf - BMCU370 firmware with debug symbols
 - esp32_firmware.bin - ESP32-S3 main application
 - esp32_bootloader.bin - ESP32 bootloader
@@ -107,7 +105,7 @@ ESP32-S3 (Complete):
     0x0000 esp32_bootloader.bin \\
     0x8000 esp32_partitions.bin \\
     0x10000 esp32_firmware.bin \\
-    0x110000 esp32_littlefs.bin
+    0x310000 esp32_littlefs.bin
 
 ESP32-S3 (Firmware Only):
   esptool.py --chip esp32s3 --port /dev/ttyUSB0 write_flash -z 0x10000 esp32_firmware.bin
@@ -122,7 +120,6 @@ echo "Output files in: build-output/"
 echo ""
 echo "BMCU370 files:"
 echo "  - bmcu370_firmware.bin"
-echo "  - bmcu370_firmware.hex"
 echo "  - bmcu370_firmware.elf"
 echo ""
 echo "ESP32 files:"
