@@ -45,6 +45,18 @@ bool WebServerManager::init(BMCU370_Interface* interface, HistoricalDataManager*
         setupFallbackInterface();
     }
     
+    // Register OTA progress callback
+    ota_manager.onProgress([this](int progress) {
+        if (websocket.count() > 0) {
+            JsonDocument doc;
+            doc["type"] = "ota_progress";
+            doc["progress"] = progress;
+            String response;
+            serializeJson(doc, response);
+            websocket.textAll(response);
+        }
+    });
+
     // Start server
     server.begin();
     
@@ -87,22 +99,21 @@ void WebServerManager::handle() {
 
             WiFi.scanDelete();
             wifi_scan_requested = false;
+        } else if (millis() - wifi_scan_start_time > WIFI_SCAN_TIMEOUT_MS) {
+            ESP_LOGE(TAG, "WiFi scan timed out");
+            WiFi.scanDelete(); // Abort scan
+            wifi_scan_requested = false;
+
+            JsonDocument doc;
+            doc["type"] = "wifi_scan_result";
+            doc["error"] = "Scan timed out";
+            doc["networks"] = JsonArray();
+            String response;
+            serializeJson(doc, response);
+            websocket.textAll(response);
         }
-        // if scan is still running, do nothing and wait for next handle() call
     }
 
-    // Broadcast OTA progress
-    if (ota_manager.isActive()) {
-        JsonDocument doc;
-        doc["type"] = "ota_progress";
-        doc["progress"] = ota_manager.getProgress();
-        doc["state"] = (int)ota_manager.getState();
-        doc["error"] = ota_manager.getLastError();
-
-        String response;
-        serializeJson(doc, response);
-        websocket.textAll(response);
-    }
 
     // Cleanup closed WebSocket connections
     websocket.cleanupClients();
@@ -1015,10 +1026,11 @@ void WebServerManager::handleWebSocketEvent(AsyncWebSocket* server, AsyncWebSock
                     }
                 } else if (command == "start_wifi_scan") {
                     ESP_LOGI(TAG, "WiFi scan requested via WebSocket");
-                    if (WiFi.scanComplete() == WIFI_SCAN_RUNNING) {
+                    if (wifi_scan_requested) {
                         sendErrorToClient(client, "Scan already in progress");
                     } else {
                         wifi_scan_requested = true;
+                        wifi_scan_start_time = millis();
                         WiFi.scanNetworks(true, false, false, 300);
                     }
                 } else {

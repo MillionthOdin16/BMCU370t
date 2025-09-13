@@ -21,6 +21,7 @@ private:
     HistoricalDataManager* history_manager;
     bool littlefs_available;
     bool wifi_scan_requested;
+    unsigned long wifi_scan_start_time;
     
     // Rate limiting
     std::map<String, unsigned long> client_last_call;
