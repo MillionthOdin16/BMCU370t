@@ -406,6 +406,11 @@ body {
     font-size: 1rem;
 }
 
+.form-group input.input-error {
+    border-color: #e74c3c; /* Red for error */
+    box-shadow: 0 0 0 2px rgba(231, 76, 60, 0.2);
+}
+
 .networks-list {
     margin-top: 15px;
     max-height: 200px;

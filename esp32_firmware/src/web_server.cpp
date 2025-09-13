@@ -13,7 +13,7 @@ extern OTAManager ota_manager;
 WebServerManager::WebServerManager() 
     : server(WEB_SERVER_PORT), websocket("/ws"), bmcu_interface(nullptr), history_manager(nullptr),
       littlefs_available(false), last_websocket_update(0), last_error_log(0), consecutive_errors(0),
-      api_request_count(0), websocket_message_count(0), error_count(0) {
+      api_request_count(0), websocket_message_count(0), error_count(0), wifi_scan_requested(false) {
     
     // The client_last_call map for rate limiting is default-initialized.
 }
@@ -63,6 +63,47 @@ void WebServerManager::handle() {
         last_websocket_update = current_time;
     }
     
+    // Handle WiFi scan results
+    if (wifi_scan_requested) {
+        int16_t scanResult = WiFi.scanComplete();
+        if (scanResult >= 0) {
+            ESP_LOGI(TAG, "WiFi scan completed with %d networks.", scanResult);
+            JsonDocument doc;
+            doc["type"] = "wifi_scan_result";
+            JsonArray networks = doc.createNestedArray("networks");
+
+            if (scanResult > 0) {
+                for (int i = 0; i < scanResult; ++i) {
+                    JsonObject network = networks.createNestedObject();
+                    network["ssid"] = WiFi.SSID(i);
+                    network["rssi"] = WiFi.RSSI(i);
+                    network["encryption"] = WiFi.encryptionType(i) == WIFI_AUTH_OPEN ? "Open" : "Encrypted";
+                }
+            }
+
+            String response;
+            serializeJson(doc, response);
+            websocket.textAll(response);
+
+            WiFi.scanDelete();
+            wifi_scan_requested = false;
+        }
+        // if scan is still running, do nothing and wait for next handle() call
+    }
+
+    // Broadcast OTA progress
+    if (ota_manager.isActive()) {
+        JsonDocument doc;
+        doc["type"] = "ota_progress";
+        doc["progress"] = ota_manager.getProgress();
+        doc["state"] = (int)ota_manager.getState();
+        doc["error"] = ota_manager.getLastError();
+
+        String response;
+        serializeJson(doc, response);
+        websocket.textAll(response);
+    }
+
     // Cleanup closed WebSocket connections
     websocket.cleanupClients();
 }
@@ -636,27 +677,33 @@ void WebServerManager::setupFallbackInterface() {
 
 void WebServerManager::handleGetStatus(AsyncWebServerRequest* request) {
     logRequest(request, "/api/status");
-    
+
     if (isRateLimited(request)) {
         request->send(429, "application/json", "{\"error\":\"Rate limited\"}");
         return;
     }
-    
+
     if (!bmcu_interface) {
         error_count++;
         request->send(500, "application/json", "{\"error\":\"BMCU370 interface not initialized\"}");
         return;
     }
-    
-    if (!bmcu_interface->isConnected()) {
-        request->send(503, "application/json", "{\"error\":\"BMCU370 not connected\"}");
-        return;
-    }
-    
+
+    // Always update status, which handles connected/disconnected states internally
+    bmcu_interface->updateStatus();
+
     JsonDocument status = bmcu_interface->getStatus();
+
+    // Add ESP32-specific info to the status object
+    JsonObject system = status.is<JsonObject>() ? status["system"].as<JsonObject>() : status.createNestedObject("system");
+    system["esp32_version"] = BMCU370_INTERFACE_VERSION;
+    system["esp32_build_date"] = __DATE__ " " __TIME__;
+    system["esp32_free_heap"] = ESP.getFreeHeap();
+    system["esp32_flash_size"] = ESP.getFlashChipSize();
+
     String response;
     serializeJson(status, response);
-    
+
     request->send(200, "application/json", response);
     api_request_count++;
 }
@@ -800,44 +847,16 @@ void WebServerManager::handleSystemControl(AsyncWebServerRequest* request) {
 void WebServerManager::handleWiFiScan(AsyncWebServerRequest* request) {
     logRequest(request, "/api/wifi/scan");
     
-    ESP_LOGI(TAG, "Starting async WiFi scan...");
-    
-    // Check if scan is already in progress
-    int16_t scanResult = WiFi.scanComplete();
-    
-    if (scanResult == WIFI_SCAN_RUNNING) {
-        // Scan already in progress
-        request->send(202, "application/json", "{\"status\":\"scanning\",\"message\":\"Scan in progress\"}");
-        api_request_count++;
+    if (WiFi.scanComplete() == WIFI_SCAN_RUNNING || wifi_scan_requested) {
+        request->send(409, "application/json", "{\"error\":\"Scan already in progress\"}");
         return;
     }
+
+    ESP_LOGI(TAG, "WiFi scan requested via HTTP, triggering WebSocket broadcast.");
+    wifi_scan_requested = true;
+    WiFi.scanNetworks(true, false, false, 300);
     
-    if (scanResult >= 0) {
-        // Previous scan results available
-        String json = "{\"networks\":[";
-        
-        if (scanResult > 0) {
-            for (int i = 0; i < scanResult; ++i) {
-                if (i > 0) json += ",";
-                json += "{";
-                json += "\"ssid\":\"" + WiFi.SSID(i) + "\",";
-                json += "\"rssi\":" + String(WiFi.RSSI(i)) + ",";
-                json += "\"encryption\":\"" + String(WiFi.encryptionType(i) == WIFI_AUTH_OPEN ? "Open" : "Encrypted") + "\"";
-                json += "}";
-            }
-        }
-        
-        json += "],\"count\":" + String(scanResult) + ",\"status\":\"complete\"}";
-        
-        WiFi.scanDelete();
-        request->send(200, "application/json", json);
-        api_request_count++;
-        return;
-    }
-    
-    // Start new async scan
-    WiFi.scanNetworks(true, false, false, 300); // async=true, show_hidden=false, passive=false, max_ms_per_chan=300
-    request->send(202, "application/json", "{\"status\":\"started\",\"message\":\"Scan started, check again in a few seconds\"}");
+    request->send(202, "application/json", "{\"status\":\"scan_started\",\"message\":\"Scan started, result will be sent via WebSocket\"}");
     api_request_count++;
 }
 
@@ -941,7 +960,11 @@ void WebServerManager::handleWebSocketEvent(AsyncWebSocket* server, AsyncWebSock
                 websocket_message_count++;
                 
                 // Handle WebSocket commands
-                if (message == "get_status") {
+                JsonDocument doc;
+                deserializeJson(doc, message);
+                String command = doc["command"];
+
+                if (command == "get_status") {
                     if (bmcu_interface && bmcu_interface->isConnected()) {
                         JsonDocument status = bmcu_interface->getStatus();
                         String response;
@@ -949,6 +972,14 @@ void WebServerManager::handleWebSocketEvent(AsyncWebSocket* server, AsyncWebSock
                         client->text(response);
                     } else {
                         sendErrorToClient(client, "BMCU370 not connected");
+                    }
+                } else if (command == "start_wifi_scan") {
+                    ESP_LOGI(TAG, "WiFi scan requested via WebSocket");
+                    if (WiFi.scanComplete() == WIFI_SCAN_RUNNING) {
+                        sendErrorToClient(client, "Scan already in progress");
+                    } else {
+                        wifi_scan_requested = true;
+                        WiFi.scanNetworks(true, false, false, 300);
                     }
                 } else {
                     sendErrorToClient(client, "Unknown command");
@@ -969,6 +1000,8 @@ void WebServerManager::broadcastStatus() {
     }
     
     JsonDocument status = bmcu_interface->getStatus();
+    status["type"] = "status"; // Add type for client-side handling
+
     String message;
     serializeJson(status, message);
     

@@ -6,6 +6,8 @@ class BMCU370WebInterface {
         this.currentTab = 'dashboard';
         this.statusData = null;
         this.configData = null;
+        this.initialConfig = {};
+        this.configValidation = {};
         
         this.init();
     }
@@ -44,27 +46,77 @@ class BMCU370WebInterface {
     }
 
     setupConfigurationControls() {
-        // LED brightness sliders
-        const mainLedSlider = document.getElementById('mainLedBrightness');
-        const channelLedSlider = document.getElementById('channelLedBrightness');
-        
-        mainLedSlider.addEventListener('input', (e) => {
-            document.getElementById('mainLedBrightnessValue').textContent = e.target.value;
-        });
-        
-        channelLedSlider.addEventListener('input', (e) => {
-            document.getElementById('channelLedBrightnessValue').textContent = e.target.value;
+        this.configInputs = [
+            document.getElementById('mainLedBrightness'),
+            document.getElementById('channelLedBrightness'),
+            document.getElementById('voltageHigh'),
+            document.getElementById('voltageLow'),
+            document.getElementById('motionSendTime'),
+            document.getElementById('motionFilterK'),
+        ];
+
+        this.configInputs.forEach(input => {
+            const isSlider = input.type === 'range';
+            const eventType = isSlider ? 'input' : 'change';
+
+            input.addEventListener(eventType, (e) => {
+                if (isSlider) {
+                    document.getElementById(`${e.target.id}Value`).textContent = e.target.value;
+                }
+                this.validateAndCheckChanges();
+            });
         });
 
-        // Save configuration
         document.getElementById('saveConfig').addEventListener('click', () => {
             this.saveConfiguration();
         });
 
-        // Reset configuration
         document.getElementById('resetConfig').addEventListener('click', () => {
-            this.resetConfiguration();
+            this.confirmAction('Are you sure you want to reset all configuration to defaults?', () => {
+                this.resetConfiguration();
+                this.validateAndCheckChanges();
+            });
         });
+    }
+
+    validateField(input) {
+        const value = parseFloat(input.value);
+        const min = parseFloat(input.min);
+        const max = parseFloat(input.max);
+        let isValid = true;
+
+        if (isNaN(value)) {
+            isValid = false;
+        } else if (value < min || value > max) {
+            isValid = false;
+        }
+
+        if (isValid) {
+            input.classList.remove('input-error');
+        } else {
+            input.classList.add('input-error');
+        }
+
+        this.configValidation[input.id] = isValid;
+        return isValid;
+    }
+
+    hasConfigChanged() {
+        return this.configInputs.some(input => {
+            return String(this.initialConfig[input.id]) !== String(input.value);
+        });
+    }
+
+    validateAndCheckChanges() {
+        let allFieldsValid = true;
+        this.configInputs.forEach(input => {
+            if (!this.validateField(input)) {
+                allFieldsValid = false;
+            }
+        });
+
+        const hasChanged = this.hasConfigChanged();
+        document.getElementById('saveConfig').disabled = !allFieldsValid || !hasChanged;
     }
 
     setupDiagnosticControls() {
@@ -219,9 +271,28 @@ class BMCU370WebInterface {
             return;
         }
         
-        if (data.system) {
-            this.statusData = data;
-            this.updateDashboard();
+        // Handle different message types
+        switch (data.type) {
+            case 'status':
+                this.statusData = data;
+                this.updateDashboard();
+                break;
+            case 'wifi_scan_result':
+                this.hideLoading();
+                this.displayNetworks(data.networks || []);
+                this.showToast(`Found ${data.networks.length || 0} networks`, 'success');
+                break;
+            case 'ota_progress':
+                if (this.currentTab === 'firmware') {
+                    this.updateUploadProgress(data.progress, `Uploading... ${data.progress}%`);
+                }
+                break;
+            default:
+                if (data.system) { // For backward compatibility with general status pushes
+                    this.statusData = data;
+                    this.updateDashboard();
+                }
+                break;
         }
     }
 
@@ -275,32 +346,52 @@ class BMCU370WebInterface {
             });
             
             if (!response.ok) {
+                if (response.status === 429) {
+                    throw new Error('HTTP 429: Too Many Requests');
+                }
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
             
-            return await response.json();
+            // Handle empty responses
+            const text = await response.text();
+            return text ? JSON.parse(text) : {};
+
         } catch (error) {
             console.error('API call failed:', error);
-            this.showToast(`API Error: ${error.message}`, 'error');
+            if (error.message.includes('429')) {
+                this.showToast('Too many requests. Please wait a moment.', 'warning');
+            } else {
+                this.showToast(`API Error: ${error.message}`, 'error');
+            }
             return null;
         }
     }
 
     updateDashboard() {
         if (!this.statusData) return;
-        
+
         const { system, channels } = this.statusData;
+        const isBmcuConnected = system && (system.bambubus_status === 'online' || system.bambubus_status === 'unreachable');
         
-        // Update system overview
-        document.getElementById('systemVersion').textContent = system.version || '--';
-        document.getElementById('systemUptime').textContent = this.formatUptime(system.uptime || 0);
-        document.getElementById('deviceType').textContent = system.device_type || '--';
-        
+        if (isBmcuConnected && system.bambubus_status !== 'unreachable') {
+            document.getElementById('systemVersion').textContent = system.version || '--';
+            document.getElementById('systemUptime').textContent = this.formatUptime(system.uptime || 0);
+            document.getElementById('deviceType').textContent = system.device_type || '--';
+        } else {
+            document.getElementById('systemVersion').textContent = 'N/A';
+            document.getElementById('systemUptime').textContent = 'N/A';
+            document.getElementById('deviceType').textContent = 'N/A';
+        }
+
         const bambuBusStatus = document.getElementById('bambuBusStatus');
-        bambuBusStatus.textContent = system.bambubus_status || '--';
-        bambuBusStatus.className = `status-badge ${system.bambubus_status === 'online' ? 'online' : 'offline'}`;
-        
-        // Update channels
+        if (system.bambubus_status) {
+            bambuBusStatus.textContent = system.bambubus_status;
+            bambuBusStatus.className = `status-badge ${system.bambubus_status}`;
+        } else {
+            bambuBusStatus.textContent = 'offline';
+            bambuBusStatus.className = 'status-badge offline';
+        }
+
         this.updateChannelsDisplay(channels || []);
     }
 
@@ -481,6 +572,14 @@ class BMCU370WebInterface {
                 document.getElementById('motionFilterK').value = config.motion_params.filter_k;
             }
         }
+
+        // Store initial config and set save button state
+        this.configInputs.forEach(input => {
+            this.initialConfig[input.id] = input.value;
+            input.classList.remove('input-error');
+        });
+
+        this.validateAndCheckChanges();
     }
 
     async saveConfiguration() {
@@ -518,6 +617,11 @@ class BMCU370WebInterface {
         
         if (allSuccess) {
             this.showToast('Configuration saved successfully', 'success');
+            // Update initial config to the new values
+            this.configInputs.forEach(input => {
+                this.initialConfig[input.id] = input.value;
+            });
+            this.validateAndCheckChanges(); // This will disable the save button
         } else {
             this.showToast('Failed to save some configuration parameters', 'error');
         }
@@ -539,17 +643,33 @@ class BMCU370WebInterface {
 
     async systemControl(action) {
         this.showLoading();
-        
+
+        if (action === 'reset_esp32') {
+            this.showToast('Rebooting ESP32...', 'info');
+            // Don't wait for the response, as the server will restart
+            this.apiCall('/api/system', {
+                method: 'POST',
+                body: new URLSearchParams({ action })
+            }).catch(err => {
+                // Ignore network errors which are expected during a restart
+                console.log('Ignoring expected error from ESP32 restart:', err);
+            });
+
+            // Hide loading indicator after a short delay
+            setTimeout(() => this.hideLoading(), 1500);
+            return;
+        }
+
         const formData = new FormData();
         formData.append('action', action);
-        
+
         const result = await this.apiCall('/api/system', {
             method: 'POST',
             body: formData
         });
-        
+
         this.hideLoading();
-        
+
         if (result && result.success) {
             this.showToast(result.message || 'Command executed successfully', 'success');
         } else {
@@ -593,17 +713,17 @@ class BMCU370WebInterface {
         }
     }
 
-    async scanWiFiNetworks() {
-        this.showLoading();
-        const result = await this.apiCall('/api/wifi/scan');
-        this.hideLoading();
-        
-        if (result && result.networks) {
-            this.displayNetworks(result.networks);
-            this.showToast(`Found ${result.count} networks`, 'success');
-        } else {
-            this.showToast('Network scan failed', 'error');
+    scanWiFiNetworks() {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+            this.showToast('WebSocket not connected. Cannot start scan.', 'error');
+            return;
         }
+
+        this.showLoading();
+        const networksList = document.getElementById('networksList');
+        networksList.innerHTML = '<div class="no-networks">Scanning for networks...</div>';
+        
+        this.ws.send(JSON.stringify({ command: 'start_wifi_scan' }));
     }
 
     displayNetworks(networks) {
@@ -773,20 +893,24 @@ class BMCU370WebInterface {
     }
 
     updateSystemInfo(statusData) {
-        // Update build date and other system info
-        if (statusData.system) {
-            const buildDateElement = document.getElementById('buildDate');
-            const flashUsageElement = document.getElementById('flashUsage');
-            const freeHeapElement = document.getElementById('freeHeap');
+        if (statusData && statusData.system) {
+            const system = statusData.system;
             
-            if (buildDateElement) {
-                buildDateElement.textContent = statusData.system.build_date || '--';
+            // Update ESP32 firmware info
+            document.getElementById('firmwareVersion').textContent = system.esp32_version || '1.0.0';
+            document.getElementById('buildDate').textContent = system.esp32_build_date || '--';
+
+            if (system.esp32_flash_size) {
+                const flashSizeMB = system.esp32_flash_size / (1024 * 1024);
+                document.getElementById('flashUsage').textContent = `${flashSizeMB} MB`;
+            } else {
+                document.getElementById('flashUsage').textContent = '--';
             }
-            if (flashUsageElement && statusData.system.flash_usage) {
-                flashUsageElement.textContent = `${statusData.system.flash_usage}%`;
-            }
-            if (freeHeapElement && statusData.system.free_heap) {
-                freeHeapElement.textContent = `${(statusData.system.free_heap / 1024).toFixed(1)} KB`;
+
+            if (system.esp32_free_heap) {
+                document.getElementById('freeHeap').textContent = `${(system.esp32_free_heap / 1024).toFixed(1)} KB`;
+            } else {
+                document.getElementById('freeHeap').textContent = '--';
             }
         }
     }
@@ -827,33 +951,23 @@ class BMCU370WebInterface {
         }
 
         const formData = new FormData();
-        formData.append('firmware', this.selectedFile);
+        formData.append('firmware', this.selectedFile, this.selectedFile.name);
 
-        // Show progress UI
         document.getElementById('uploadProgress').style.display = 'block';
         document.getElementById('uploadFirmware').style.display = 'none';
         document.getElementById('abortUpload').style.display = 'inline-flex';
-        
         this.updateUploadProgress(0, 'Starting upload...');
-        
+
         try {
             const response = await fetch('/api/ota/upload', {
                 method: 'POST',
-                body: formData
+                body: formData,
             });
 
             if (response.ok) {
                 this.updateUploadProgress(100, 'Upload complete! Device restarting...');
                 this.showToast('Firmware uploaded successfully! Device will restart.', 'success');
-                
-                // Reset UI after delay
-                setTimeout(() => {
-                    this.resetUploadUI();
-                    // Reconnect after restart
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 10000);
-                }, 3000);
+                setTimeout(() => window.location.reload(), 10000);
             } else {
                 const error = await response.json();
                 throw new Error(error.error || 'Upload failed');

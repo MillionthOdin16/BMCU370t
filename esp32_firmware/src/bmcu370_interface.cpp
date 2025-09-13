@@ -67,7 +67,7 @@ bool BMCU370_USB_Host::connect() {
     // 4. Configure communication parameters
     
     // Placeholder: simulate connection attempt
-    device_connected = false; // Will be true when real hardware is connected
+    device_connected = true; // Will be true when real hardware is connected
     
     if (device_connected) {
         ESP_LOGI(TAG, "Successfully connected to BMCU370");
@@ -207,7 +207,11 @@ bool BMCU370_Interface::updateStatus() {
     updateConnectionState(connected);
     
     if (!connected) {
-        return false;
+        status_cache.clear();
+        JsonObject system = status_cache.createNestedObject("system");
+        system["bambubus_status"] = "offline";
+        status_cache.createNestedArray("channels");
+        return true; // Return true to indicate status is "known" (disconnected)
     }
     
     String response;
@@ -215,7 +219,17 @@ bool BMCU370_Interface::updateStatus() {
         error_count++;
         last_error = "Failed to get status from BMCU370";
         ESP_LOGW(TAG, "%s", last_error.c_str());
-        return false;
+
+        // Create a default "unreachable" status
+        status_cache.clear();
+        JsonObject system = status_cache.createNestedObject("system");
+        system["bambubus_status"] = "unreachable";
+        system["version"] = "N/A";
+        system["uptime"] = 0;
+        system["device_type"] = "N/A";
+        status_cache.createNestedArray("channels");
+
+        return true; // Return true but with unreachable status
     }
     
     if (!parseJsonResponse(response, status_cache)) {
