@@ -10,6 +10,7 @@
 #define MAX_HISTORY_ENTRIES          1440     // 24 hours of 1-minute samples
 #define HISTORY_FILE_PATH            "/history.json"
 #define HISTORY_RETENTION_DAYS       7        // Keep 7 days of data
+#define FILESYSTEM_CHECK_INTERVAL_MS 30000    // Check filesystem every 30 seconds
 
 struct HistoricalDataPoint {
     unsigned long timestamp;
@@ -63,6 +64,7 @@ public:
     
 private:
     void maintainBufferSize();
+    void checkLittleFSAvailability(bool force_check = false);
     JsonDocument createDataPoint(const HistoricalDataPoint& point);
 };
 

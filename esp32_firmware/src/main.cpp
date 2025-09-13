@@ -46,49 +46,96 @@ void setup() {
     }
 #endif
     
-    // Initialize file system for web interface with enhanced error handling
+    // Initialize LittleFS filesystem with comprehensive error handling
     Serial.println("Initializing LittleFS filesystem...");
-    bool littlefs_mounted = LittleFS.begin(false);
+    Serial.printf("Expected partition: 0x310000-0x3D0000 (768KB)\n");
+    
+    bool littlefs_mounted = false;
+    
+    // Attempt 1: Try normal mount
+    Serial.println("Attempt 1: Normal LittleFS mount...");
+    littlefs_mounted = LittleFS.begin(false);
     
     if (!littlefs_mounted) {
-        Serial.println("WARN: LittleFS mount failed, attempting format and retry...");
+        // Attempt 2: Force format and mount
+        Serial.println("Attempt 2: Format LittleFS and retry...");
+        Serial.println("WARNING: This will erase all existing web files");
+        
         if (LittleFS.format()) {
-            Serial.println("LittleFS format successful, retrying mount...");
+            Serial.println("LittleFS format completed successfully");
+            delay(1000); // Allow flash to settle
+            
             littlefs_mounted = LittleFS.begin(false);
+            if (littlefs_mounted) {
+                Serial.println("LittleFS mount successful after format");
+            }
+        } else {
+            Serial.println("ERROR: LittleFS format failed");
         }
     }
     
     if (!littlefs_mounted) {
-        Serial.println("ERROR: Failed to initialize LittleFS filesystem");
-        Serial.println("Possible causes:");
-        Serial.println("  1. LittleFS partition not flashed");
-        Serial.println("  2. Partition table mismatch");
-        Serial.println("  3. Flash corruption");
-        Serial.println("Web interface will use enhanced fallback mode with full WiFi setup");
-    } else {
-        Serial.println("✓ LittleFS filesystem mounted successfully");
+        // Attempt 3: Try forced mount with formatting enabled
+        Serial.println("Attempt 3: Force mount with format_if_failed=true...");
+        littlefs_mounted = LittleFS.begin(true);
+    }
+    
+    if (littlefs_mounted) {
+        Serial.println("✅ LittleFS filesystem mounted successfully!");
         
-        // Display filesystem info
+        // Display comprehensive filesystem info
         size_t totalBytes = LittleFS.totalBytes();
         size_t usedBytes = LittleFS.usedBytes();
-        Serial.printf("LittleFS: %d/%d bytes used (%.1f%%)\n", 
-                     usedBytes, totalBytes, (float)usedBytes/totalBytes*100);
+        Serial.printf("📊 LittleFS Stats:\n");
+        Serial.printf("   Total: %d bytes (%.1f KB)\n", totalBytes, totalBytes/1024.0);
+        Serial.printf("   Used:  %d bytes (%.1f KB, %.1f%%)\n", 
+                     usedBytes, usedBytes/1024.0, (float)usedBytes/totalBytes*100);
+        Serial.printf("   Free:  %d bytes (%.1f KB)\n", 
+                     totalBytes-usedBytes, (totalBytes-usedBytes)/1024.0);
         
-        // List files in LittleFS for debugging
+        // List files for debugging
         File root = LittleFS.open("/");
         if (root && root.isDirectory()) {
-            Serial.println("LittleFS contents:");
+            Serial.println("📁 LittleFS contents:");
             File file = root.openNextFile();
             int fileCount = 0;
+            size_t totalFileSize = 0;
             while (file) {
-                Serial.printf("  %s (%d bytes)\n", file.name(), file.size());
+                size_t fileSize = file.size();
+                Serial.printf("   📄 %s (%d bytes)\n", file.name(), fileSize);
+                totalFileSize += fileSize;
                 file = root.openNextFile();
                 fileCount++;
             }
+            Serial.printf("   Total: %d files, %d bytes\n", fileCount, totalFileSize);
+            
             if (fileCount == 0) {
-                Serial.println("  (empty - web files not uploaded)");
+                Serial.println("   ⚠️  No web files found - interface will run in fallback mode");
             }
         }
+        
+        // Test write capability
+        File testFile = LittleFS.open("/test_write.txt", "w");
+        if (testFile) {
+            testFile.println("LittleFS write test");
+            testFile.close();
+            Serial.println("✅ LittleFS write test successful");
+            LittleFS.remove("/test_write.txt");
+        } else {
+            Serial.println("⚠️  LittleFS write test failed - filesystem may be read-only");
+        }
+        
+    } else {
+        Serial.println("❌ CRITICAL: LittleFS mount failed after all attempts");
+        Serial.println("\n🔧 Troubleshooting Steps:");
+        Serial.println("1. Flash LittleFS partition:");
+        Serial.println("   esptool.py --chip esp32s3 --port /dev/ttyUSB0 \\");
+        Serial.println("   write_flash --flash_size 4MB 0x310000 littlefs.bin");
+        Serial.println("2. Erase entire flash and reflash everything:");
+        Serial.println("   esptool.py --chip esp32s3 --port /dev/ttyUSB0 erase_flash");
+        Serial.println("3. Check partition table matches this firmware build");
+        Serial.println("4. Verify ESP32-S3 N4R2 hardware (4MB flash required)");
+        Serial.println("\n🌐 Running in enhanced fallback mode with full functionality");
     }
     
     // Initialize USB host interface

@@ -12,9 +12,8 @@ HistoricalDataManager::HistoricalDataManager()
 bool HistoricalDataManager::init() {
     ESP_LOGI(TAG, "Initializing historical data manager");
     
-    // Check if LittleFS is available
-    littlefs_available = LittleFS.begin(false);
-    last_filesystem_check = millis();
+    // Check if LittleFS is available with rate limiting for failed checks
+    checkLittleFSAvailability(true); // Force initial check
     
     if (!littlefs_available) {
         ESP_LOGW(TAG, "LittleFS not available - historical data will be memory-only");
@@ -36,6 +35,50 @@ bool HistoricalDataManager::init() {
     clearOldData();
     
     return true;
+}
+
+void HistoricalDataManager::checkLittleFSAvailability(bool force_check) {
+    unsigned long current_time = millis();
+    
+    // Rate limit filesystem checks to prevent VFS API spam
+    if (!force_check && (current_time - last_filesystem_check < FILESYSTEM_CHECK_INTERVAL_MS)) {
+        return;
+    }
+    
+    // Only attempt remount if we think it's not available
+    if (!littlefs_available) {
+        // Avoid spamming LittleFS.begin() calls - use exponential backoff
+        static unsigned long next_retry_time = 0;
+        static int retry_interval = 5000; // Start with 5 seconds
+        
+        if (current_time < next_retry_time && !force_check) {
+            return; // Too soon to retry
+        }
+        
+        ESP_LOGD(TAG, "Checking LittleFS availability...");
+        bool was_available = littlefs_available;
+        
+        // Try to begin LittleFS (this is the source of VFS errors)
+        littlefs_available = LittleFS.begin(false);
+        
+        if (littlefs_available && !was_available) {
+            ESP_LOGI(TAG, "LittleFS now available - resuming data persistence");
+            retry_interval = 5000; // Reset retry interval
+        } else if (!littlefs_available) {
+            // Exponential backoff for retries (up to 5 minutes)
+            retry_interval = min(retry_interval * 2, 300000);
+            next_retry_time = current_time + retry_interval;
+            
+            // Rate-limited warning (every 2 minutes max)
+            static unsigned long last_warning = 0;
+            if (current_time - last_warning > 120000) {
+                ESP_LOGW(TAG, "LittleFS unavailable - next retry in %d seconds", retry_interval/1000);
+                last_warning = current_time;
+            }
+        }
+    }
+    
+    last_filesystem_check = current_time;
 }
 
 void HistoricalDataManager::addDataPoint(int channel_id, const JsonObjectConst& channel_data) {
@@ -197,32 +240,19 @@ JsonDocument HistoricalDataManager::getTrendAnalysis() {
 bool HistoricalDataManager::saveToFile() {
     if (!data_dirty) return true;
     
-    // Rate limit filesystem availability checks (every 30 seconds)
-    unsigned long current_time = millis();
-    if (!littlefs_available && (current_time - last_filesystem_check > 30000)) {
-        littlefs_available = LittleFS.begin(false);
-        last_filesystem_check = current_time;
-        
-        if (!littlefs_available) {
-            // Only log this occasionally to avoid spam
-            static unsigned long last_warning = 0;
-            if (current_time - last_warning > 60000) { // Warn every minute max
-                ESP_LOGW(TAG, "LittleFS still not available - data remains memory-only");
-                last_warning = current_time;
-            }
-            return false;
-        } else {
-            ESP_LOGI(TAG, "LittleFS now available - resuming data persistence");
-        }
-    }
+    // Check filesystem availability with rate limiting
+    checkLittleFSAvailability(false);
     
     if (!littlefs_available) {
-        return false; // Don't spam filesystem calls
+        return false; // Don't attempt filesystem operations
     }
+    
+    ESP_LOGD(TAG, "Saving historical data to file...");
     
     File file = LittleFS.open(HISTORY_FILE_PATH, "w");
     if (!file) {
-        ESP_LOGE(TAG, "Failed to open history file for writing");
+        ESP_LOGW(TAG, "Failed to open history file for writing - filesystem may be unavailable");
+        littlefs_available = false; // Mark as unavailable to prevent spam
         return false;
     }
     
