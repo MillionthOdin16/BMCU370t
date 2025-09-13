@@ -18,6 +18,7 @@ on:
       - 'platformio.ini'
       - 'lib/**'
       - '.github/workflows/build-firmware.yml'
+  workflow_dispatch:  # Allow manual triggering
 
 jobs:
   build-bmcu370:
