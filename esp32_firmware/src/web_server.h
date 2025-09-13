@@ -23,6 +23,8 @@ private:
     // Rate limiting
     unsigned long last_api_call[WEBSOCKET_MAX_CLIENTS];
     unsigned long last_websocket_update;
+    unsigned long last_error_log;
+    uint32_t consecutive_errors;
     
     // Request tracking
     uint32_t api_request_count;

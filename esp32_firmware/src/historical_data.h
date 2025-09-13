@@ -35,6 +35,8 @@ private:
     std::vector<HistoricalDataPoint> data_buffer;
     unsigned long last_sample_time;
     bool data_dirty;
+    bool littlefs_available;
+    unsigned long last_filesystem_check;
     
 public:
     HistoricalDataManager();

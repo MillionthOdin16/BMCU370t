@@ -12,8 +12,8 @@ extern OTAManager ota_manager;
 
 WebServerManager::WebServerManager() 
     : server(WEB_SERVER_PORT), websocket("/ws"), bmcu_interface(nullptr), history_manager(nullptr),
-      littlefs_available(false), last_websocket_update(0), api_request_count(0), 
-      websocket_message_count(0), error_count(0) {
+      littlefs_available(false), last_websocket_update(0), last_error_log(0), consecutive_errors(0),
+      api_request_count(0), websocket_message_count(0), error_count(0) {
     
     // Initialize rate limiting arrays
     for (int i = 0; i < WEBSOCKET_MAX_CLIENTS; i++) {
@@ -407,31 +407,43 @@ void WebServerManager::setupFallbackInterface() {
         html += "  loading.style.display = 'block';";
         html += "  list.innerHTML = '';";
         
-        html += "  fetch('/api/wifi/scan')";
-        html += "    .then(r => r.json())";
-        html += "    .then(d => {";
-        html += "      loading.style.display = 'none';";
-        html += "      if (d.networks && d.networks.length > 0) {";
-        html += "        list.innerHTML = d.networks.map(n => ";
-        html += "          `<div class='network-item' onclick='selectNetwork(\\\"${n.ssid}\\\")'>`;";
-        html += "            `<div class='network-info'>`;";
-        html += "              `<div><div class='network-name'>${n.ssid}</div>`;";
-        html += "              `<div class='network-security'>${n.auth || 'Open'}</div></div>`;";
-        html += "              `<div class='network-signal'>${n.rssi} dBm</div>`;";
-        html += "            `</div>`;";
-        html += "          `</div>`";
-        html += "        ).join('');";
-        html += "        showToast(`Found ${d.networks.length} networks`, 'success');";
-        html += "      } else {";
-        html += "        list.innerHTML = '<div class=\"no-networks\">No networks found</div>';";
-        html += "        showToast('No networks found', 'error');";
-        html += "      }";
-        html += "    })";
-        html += "    .catch(err => {";
-        html += "      loading.style.display = 'none';";
-        html += "      list.innerHTML = '<div class=\"no-networks\">Scan failed</div>';";
-        html += "      showToast('Network scan failed', 'error');";
-        html += "    });";
+        html += "  function pollScanResults() {";
+        html += "    fetch('/api/wifi/scan')";
+        html += "      .then(r => r.json())";
+        html += "      .then(d => {";
+        html += "        if (d.status === 'scanning' || d.status === 'started') {";
+        html += "          setTimeout(pollScanResults, 2000);"; // Check again in 2 seconds
+        html += "        } else if (d.status === 'complete' || d.networks) {";
+        html += "          loading.style.display = 'none';";
+        html += "          if (d.networks && d.networks.length > 0) {";
+        html += "            list.innerHTML = d.networks.map(n => ";
+        html += "              `<div class='network-item' onclick='selectNetwork(\\\"${n.ssid}\\\")'>`;";
+        html += "                `<div class='network-info'>`;";
+        html += "                  `<div><div class='network-name'>${n.ssid}</div>`;";
+        html += "                  `<div class='network-security'>${n.encryption || 'Open'}</div></div>`;";
+        html += "                  `<div class='network-signal'>${n.rssi} dBm</div>`;";
+        html += "                `</div>`;";
+        html += "              `</div>`";
+        html += "            ).join('');";
+        html += "            showToast(`Found ${d.networks.length} networks`, 'success');";
+        html += "          } else {";
+        html += "            list.innerHTML = '<div class=\"no-networks\">No networks found</div>';";
+        html += "            showToast('No networks found', 'warning');";
+        html += "          }";
+        html += "        } else {";
+        html += "          loading.style.display = 'none';";
+        html += "          list.innerHTML = '<div class=\"no-networks\">Scan failed</div>';";
+        html += "          showToast('Network scan failed', 'error');";
+        html += "        }";
+        html += "      })";
+        html += "      .catch(err => {";
+        html += "        loading.style.display = 'none';";
+        html += "        list.innerHTML = '<div class=\"no-networks\">Scan failed</div>';";
+        html += "        showToast('Network scan failed', 'error');";
+        html += "      });";
+        html += "  }";
+        
+        html += "  pollScanResults();"; // Start polling
         html += "}";
         
         html += "function selectNetwork(ssid) {";
@@ -658,27 +670,44 @@ void WebServerManager::handleSystemControl(AsyncWebServerRequest* request) {
 void WebServerManager::handleWiFiScan(AsyncWebServerRequest* request) {
     logRequest(request, "/api/wifi/scan");
     
-    ESP_LOGI(TAG, "Starting WiFi scan...");
-    int n = WiFi.scanNetworks();
+    ESP_LOGI(TAG, "Starting async WiFi scan...");
     
-    String json = "{\"networks\":[";
+    // Check if scan is already in progress
+    int16_t scanResult = WiFi.scanComplete();
     
-    if (n > 0) {
-        for (int i = 0; i < n; ++i) {
-            if (i > 0) json += ",";
-            json += "{";
-            json += "\"ssid\":\"" + WiFi.SSID(i) + "\",";
-            json += "\"rssi\":" + String(WiFi.RSSI(i)) + ",";
-            json += "\"encryption\":\"" + String(WiFi.encryptionType(i) == WIFI_AUTH_OPEN ? "Open" : "Encrypted") + "\"";
-            json += "}";
-        }
+    if (scanResult == WIFI_SCAN_RUNNING) {
+        // Scan already in progress
+        request->send(202, "application/json", "{\"status\":\"scanning\",\"message\":\"Scan in progress\"}");
+        api_request_count++;
+        return;
     }
     
-    json += "],\"count\":" + String(n) + "}";
+    if (scanResult >= 0) {
+        // Previous scan results available
+        String json = "{\"networks\":[";
+        
+        if (scanResult > 0) {
+            for (int i = 0; i < scanResult; ++i) {
+                if (i > 0) json += ",";
+                json += "{";
+                json += "\"ssid\":\"" + WiFi.SSID(i) + "\",";
+                json += "\"rssi\":" + String(WiFi.RSSI(i)) + ",";
+                json += "\"encryption\":\"" + String(WiFi.encryptionType(i) == WIFI_AUTH_OPEN ? "Open" : "Encrypted") + "\"";
+                json += "}";
+            }
+        }
+        
+        json += "],\"count\":" + String(scanResult) + ",\"status\":\"complete\"}";
+        
+        WiFi.scanDelete();
+        request->send(200, "application/json", json);
+        api_request_count++;
+        return;
+    }
     
-    WiFi.scanDelete();
-    
-    request->send(200, "application/json", json);
+    // Start new async scan
+    WiFi.scanNetworks(true, false, false, 300); // async=true, show_hidden=false, passive=false, max_ms_per_chan=300
+    request->send(202, "application/json", "{\"status\":\"started\",\"message\":\"Scan started, check again in a few seconds\"}");
     api_request_count++;
 }
 
@@ -694,12 +723,42 @@ void WebServerManager::handleWiFiConnect(AsyncWebServerRequest* request) {
     String ssid = request->getParam("ssid", true)->value();
     String password = request->getParam("password", true)->value();
     
+    ESP_LOGI(TAG, "WiFi connection request for SSID: %s", ssid.c_str());
+    
     bool success = wifi_manager.connectToNetwork(ssid, password);
     if (success) {
-        request->send(200, "application/json", "{\"success\":true,\"message\":\"Connected to WiFi\"}");
+        String json = "{\"success\":true,\"message\":\"Connected to WiFi\"";
+        if (WiFi.status() == WL_CONNECTED) {
+            json += ",\"ip\":\"" + WiFi.localIP().toString() + "\"";
+            json += ",\"ssid\":\"" + WiFi.SSID() + "\"";
+        }
+        json += "}";
+        request->send(200, "application/json", json);
+        ESP_LOGI(TAG, "WiFi connection successful to %s", ssid.c_str());
     } else {
         error_count++;
-        request->send(400, "application/json", "{\"error\":\"Failed to connect to WiFi\"}");
+        String json = "{\"error\":\"Failed to connect to WiFi network";
+        
+        // Provide specific error details
+        wl_status_t status = WiFi.status();
+        switch (status) {
+            case WL_CONNECT_FAILED:
+                json += " - Wrong password or authentication failed";
+                break;
+            case WL_NO_SSID_AVAIL:
+                json += " - Network not found";
+                break;
+            case WL_CONNECTION_LOST:
+                json += " - Connection lost during handshake";
+                break;
+            default:
+                json += " - Connection timeout or unknown error";
+                break;
+        }
+        json += "\"}";
+        
+        request->send(400, "application/json", json);
+        ESP_LOGE(TAG, "WiFi connection failed to %s (status: %d)", ssid.c_str(), status);
     }
     
     api_request_count++;

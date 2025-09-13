@@ -182,20 +182,71 @@ void WiFiManager::stopAccessPoint() {
 bool WiFiManager::attemptConnection(const String& ssid, const String& password, uint32_t timeout_ms) {
     ESP_LOGI(TAG, "Attempting connection to: %s", ssid.c_str());
     
+    // Disconnect from any previous connection
+    WiFi.disconnect(true);
+    delay(100);
+    
+    // Set WiFi mode to station
+    WiFi.mode(WIFI_STA);
+    delay(100);
+    
+    // Begin connection
     WiFi.begin(ssid.c_str(), password.c_str());
     
     unsigned long start_time = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - start_time < timeout_ms) {
+    uint32_t retry_count = 0;
+    const uint32_t max_retries = timeout_ms / 500;
+    
+    while (WiFi.status() != WL_CONNECTED && retry_count < max_retries) {
         delay(500);
-        ESP_LOGI(TAG, "Connecting...");
+        retry_count++;
+        
+        // Log progress every 2 seconds (4 retries)
+        if (retry_count % 4 == 0) {
+            ESP_LOGI(TAG, "Connecting... (%lu/%lu)", retry_count, max_retries);
+            
+            // Check for specific error conditions
+            wl_status_t status = WiFi.status();
+            if (status == WL_CONNECT_FAILED) {
+                ESP_LOGE(TAG, "Connection failed - wrong password or network issue");
+                break;
+            } else if (status == WL_NO_SSID_AVAIL) {
+                ESP_LOGE(TAG, "Network not found - SSID may be hidden or out of range");
+                break;
+            }
+        }
+        
+        // Yield to prevent watchdog timeout
+        yield();
     }
     
     bool connected = (WiFi.status() == WL_CONNECTED);
     if (connected) {
         ESP_LOGI(TAG, "Connected to %s", ssid.c_str());
         ESP_LOGI(TAG, "IP address: %s", WiFi.localIP().toString().c_str());
+        ESP_LOGI(TAG, "Signal strength: %d dBm", WiFi.RSSI());
     } else {
-        ESP_LOGE(TAG, "Connection timeout to %s", ssid.c_str());
+        wl_status_t final_status = WiFi.status();
+        ESP_LOGE(TAG, "Connection failed to %s (status: %d)", ssid.c_str(), final_status);
+        
+        // Provide specific error messages
+        switch (final_status) {
+            case WL_CONNECT_FAILED:
+                ESP_LOGE(TAG, "Reason: Wrong password or authentication failed");
+                break;
+            case WL_NO_SSID_AVAIL:
+                ESP_LOGE(TAG, "Reason: Network not found");
+                break;
+            case WL_CONNECTION_LOST:
+                ESP_LOGE(TAG, "Reason: Connection lost during handshake");
+                break;
+            default:
+                ESP_LOGE(TAG, "Reason: Unknown connection error");
+                break;
+        }
+        
+        // Reset WiFi mode
+        WiFi.mode(WIFI_AP_STA);
     }
     
     return connected;

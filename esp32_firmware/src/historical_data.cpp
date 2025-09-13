@@ -5,7 +5,7 @@
 static const char* TAG = "HistoricalData";
 
 HistoricalDataManager::HistoricalDataManager() 
-    : last_sample_time(0), data_dirty(false) {
+    : last_sample_time(0), data_dirty(false), littlefs_available(false), last_filesystem_check(0) {
     data_buffer.reserve(MAX_HISTORY_ENTRIES);
 }
 
@@ -13,7 +13,10 @@ bool HistoricalDataManager::init() {
     ESP_LOGI(TAG, "Initializing historical data manager");
     
     // Check if LittleFS is available
-    if (!LittleFS.begin(false)) {
+    littlefs_available = LittleFS.begin(false);
+    last_filesystem_check = millis();
+    
+    if (!littlefs_available) {
         ESP_LOGW(TAG, "LittleFS not available - historical data will be memory-only");
         return true; // Still return true as we can function without persistent storage
     }
@@ -194,10 +197,27 @@ JsonDocument HistoricalDataManager::getTrendAnalysis() {
 bool HistoricalDataManager::saveToFile() {
     if (!data_dirty) return true;
     
-    // Check if LittleFS is available before trying to save
-    if (!LittleFS.begin(false)) {
-        ESP_LOGW(TAG, "Cannot save history - LittleFS not available");
-        return false;
+    // Rate limit filesystem availability checks (every 30 seconds)
+    unsigned long current_time = millis();
+    if (!littlefs_available && (current_time - last_filesystem_check > 30000)) {
+        littlefs_available = LittleFS.begin(false);
+        last_filesystem_check = current_time;
+        
+        if (!littlefs_available) {
+            // Only log this occasionally to avoid spam
+            static unsigned long last_warning = 0;
+            if (current_time - last_warning > 60000) { // Warn every minute max
+                ESP_LOGW(TAG, "LittleFS still not available - data remains memory-only");
+                last_warning = current_time;
+            }
+            return false;
+        } else {
+            ESP_LOGI(TAG, "LittleFS now available - resuming data persistence");
+        }
+    }
+    
+    if (!littlefs_available) {
+        return false; // Don't spam filesystem calls
     }
     
     File file = LittleFS.open(HISTORY_FILE_PATH, "w");
@@ -240,10 +260,8 @@ bool HistoricalDataManager::saveToFile() {
 }
 
 bool HistoricalDataManager::loadFromFile() {
-    // Check if LittleFS is available
-    if (!LittleFS.begin(false)) {
-        ESP_LOGW(TAG, "Cannot load history - LittleFS not available");
-        return false;
+    if (!littlefs_available) {
+        return false; // Don't try if we know it's not available
     }
     
     File file = LittleFS.open(HISTORY_FILE_PATH, "r");
