@@ -9,13 +9,15 @@ on:
       - 'lib/**'
       - '.github/workflows/build-firmware.yml'
   push:
+    branches:
+      - main
+      - 'copilot/**'
     paths:
       - 'src/**'
       - 'esp32_firmware/**'
       - 'platformio.ini'
       - 'lib/**'
       - '.github/workflows/build-firmware.yml'
-  workflow_dispatch:  # Allow manual triggering
 
 jobs:
   build-bmcu370:
