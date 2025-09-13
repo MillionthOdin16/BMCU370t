@@ -26,7 +26,9 @@ pio run --environment genericCH32V203C8T6
 if [ $? -eq 0 ]; then
     echo "✅ BMCU370 build successful"
     cp .pio/build/genericCH32V203C8T6/firmware.bin build-output/bmcu370_firmware.bin
-    cp .pio/build/genericCH32V203C8T6/firmware.hex build-output/bmcu370_firmware.hex
+    if [ -f .pio/build/genericCH32V203C8T6/firmware.hex ]; then
+        cp .pio/build/genericCH32V203C8T6/firmware.hex build-output/bmcu370_firmware.hex
+    fi
     cp .pio/build/genericCH32V203C8T6/firmware.elf build-output/bmcu370_firmware.elf
 else
     echo "❌ BMCU370 build failed"
