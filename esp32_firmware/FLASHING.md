@@ -136,9 +136,9 @@ Embedded Flash 4MB (N4), XMC, Embedded PSRAM 2MB (R2), AP_3v3
 
 ## Default Access
 After successful firmware flash:
-- **AP Mode**: Connect to "BMCU370-Web" network
+- **AP Mode**: Connect to "BMCU370-Config" network
 - **Web Interface**: http://192.168.4.1
-- **Default WiFi Password**: "bmcu370web"
+- **Default WiFi Password**: "bmcu370setup"
 
 ## Troubleshooting
 - Ensure ESP32-S3 is in download mode (hold BOOT button during power-on)
