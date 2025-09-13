@@ -8,6 +8,7 @@
 #include <LittleFS.h>
 #include "config.h"
 #include "bmcu370_interface.h"
+#include <map>
 
 // Forward declarations
 class HistoricalDataManager;
@@ -21,7 +22,7 @@ private:
     bool littlefs_available;
     
     // Rate limiting
-    unsigned long last_api_call[WEBSOCKET_MAX_CLIENTS];
+    std::map<String, unsigned long> client_last_call;
     unsigned long last_websocket_update;
     unsigned long last_error_log;
     uint32_t consecutive_errors;

@@ -15,10 +15,7 @@ WebServerManager::WebServerManager()
       littlefs_available(false), last_websocket_update(0), last_error_log(0), consecutive_errors(0),
       api_request_count(0), websocket_message_count(0), error_count(0) {
     
-    // Initialize rate limiting arrays
-    for (int i = 0; i < WEBSOCKET_MAX_CLIENTS; i++) {
-        last_api_call[i] = 0;
-    }
+    // The client_last_call map for rate limiting is default-initialized.
 }
 
 WebServerManager::~WebServerManager() {
@@ -190,7 +187,7 @@ void WebServerManager::setupFallbackInterface() {
         html += ".header h1 { font-size: 2em; margin-bottom: 10px; }";
         html += ".header .subtitle { opacity: 0.9; font-size: 1.1em; }";
         html += ".status { padding: 15px; margin: 15px; border-radius: 8px; font-weight: 500; }";
-        html += ".status.warning { background: #fff3cd; border: 1px solid #ffeaa7; color: #856404; }";
+        html += ".status.warning { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }"; // Red for critical
         html += ".status.info { background: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; }";
         html += ".status.success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; }";
         html += ".section { padding: 25px; border-bottom: 1px solid #eee; }";
@@ -248,7 +245,7 @@ void WebServerManager::setupFallbackInterface() {
         
         html += "<div class='status warning'>";
         html += "<i class='fas fa-exclamation-triangle'></i> ";
-        html += "<strong>Setup Mode:</strong> LittleFS filesystem not available. Using enhanced fallback interface.";
+        html += "<strong>CRITICAL:</strong> Main web interface not found! The device has started in a limited Fallback Mode. This usually means the LittleFS partition containing the web files is missing or corrupt.";
         html += "</div>";
         html += "</div>";
         
@@ -376,8 +373,7 @@ void WebServerManager::setupFallbackInterface() {
         html += "<div class='section'>";
         html += "<h3><i class='fas fa-tools'></i> Troubleshooting</h3>";
         html += "<div class='status info'>";
-        html += "<strong>LittleFS Issue:</strong> The web interface files are not available. ";
-        html += "This may be due to incomplete firmware flashing.";
+        html += "<strong>Action Required:</strong> To restore the full web interface, you must flash the LittleFS partition. This will not affect your settings.";
         html += "</div>";
         html += "<p><strong>To fix LittleFS:</strong></p>";
         html += "<pre>esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \\<br>";
@@ -454,15 +450,15 @@ void WebServerManager::setupFallbackInterface() {
         html += "        } else if (d.status === 'complete' || d.networks) {";
         html += "          loading.style.display = 'none';";
         html += "          if (d.networks && d.networks.length > 0) {";
-        html += "            list.innerHTML = d.networks.map(n => ";
-        html += "              `<div class='network-item' onclick='selectNetwork(\\\"${n.ssid}\\\")'>`;";
-        html += "                `<div class='network-info'>`;";
-        html += "                  `<div><div class='network-name'>${n.ssid}</div>`;";
-        html += "                  `<div class='network-security'>${n.encryption || 'Open'}</div></div>`;";
-        html += "                  `<div class='network-signal'>${n.rssi} dBm</div>`;";
-        html += "                `</div>`;";
-        html += "              `</div>`";
-        html += "            ).join('');";
+        html += "            list.innerHTML = d.networks.map(n => {";
+        html += "              return '<div class=\"network-item\" onclick=\"selectNetwork(\\'' + n.ssid + '\\')\">' +";
+        html += "                '<div class=\"network-info\">' +";
+        html += "                  '<div><div class=\"network-name\">' + n.ssid + '</div>' +";
+        html += "                  '<div class=\"network-security\">' + (n.encryption || 'Open') + '</div></div>' +";
+        html += "                  '<div class=\"network-signal\">' + n.rssi + ' dBm</div>' +";
+        html += "                '</div>' +";
+        html += "              '</div>';";
+        html += "            }).join('');";
         html += "            showToast(`Found ${d.networks.length} networks`, 'success');";
         html += "          } else {";
         html += "            list.innerHTML = '<div class=\"no-networks\">No networks found</div>';";
@@ -505,7 +501,7 @@ void WebServerManager::setupFallbackInterface() {
         html += "  formData.append('ssid', ssid);";
         html += "  formData.append('password', password);";
         
-        html += "  fetch('/api/wifi/connect', { method: 'POST', body: formData })";
+        html += "  fetch('/api/wifi/connect', { method: 'POST', body: new URLSearchParams(formData) })";
         html += "    .then(r => r.json())";
         html += "    .then(d => {";
         html += "      loading.style.display = 'none';";
@@ -558,16 +554,17 @@ void WebServerManager::setupFallbackInterface() {
         html += "  if (!selectedFile || uploadInProgress) return;";
         html += "  uploadInProgress = true;";
         html += "  const formData = new FormData();";
-        html += "  formData.append('firmware', selectedFile);";
+        html += "  formData.append('update', selectedFile);";
+
         html += "  document.getElementById('upload-progress').style.display = 'block';";
         html += "  document.getElementById('upload-btn').style.display = 'none';";
         html += "  document.getElementById('abort-btn').style.display = 'inline-block';";
         html += "  updateProgress(0, 'Starting upload...');";
         
-        html += "  fetch('/api/ota/upload', { method: 'POST', body: formData })";
+        html += "  fetch('/update', { method: 'POST', body: formData, onprogress: (e) => { if(e.lengthComputable) { updateProgress(Math.round((e.loaded/e.total)*100), 'Uploading...'); } } })";
         html += "    .then(r => r.json())";
         html += "    .then(d => {";
-        html += "      if (d.status === 'success' || d.success) {";
+        html += "      if (d.status === 'ok' || d.success) {";
         html += "        updateProgress(100, 'Upload complete! Restarting...');";
         html += "        showToast('Firmware uploaded successfully! Device restarting.', 'success');";
         html += "        setTimeout(() => window.location.reload(), 10000);";
@@ -993,18 +990,31 @@ void WebServerManager::sendErrorToClient(AsyncWebSocketClient* client, const Str
 bool WebServerManager::isRateLimited(AsyncWebServerRequest* request) {
     unsigned long current_time = millis();
     String client_ip = getClientIP(request);
-    
-    // Simple rate limiting based on client IP
-    // For a more sophisticated implementation, we'd use a hash map
-    // For now, just check if enough time has passed since last request
-    static unsigned long last_request_time = 0;
-    
-    if (current_time - last_request_time < API_RATE_LIMIT_MS) {
-        return true;
+
+    // Check if the client has made a request before
+    if (client_last_call.find(client_ip) != client_last_call.end()) {
+        // Check if the last call was too recent
+        if (current_time - client_last_call[client_ip] < API_RATE_LIMIT_MS) {
+            return true; // Rate limited
+        }
     }
+
+    // Update the last call time for this client
+    client_last_call[client_ip] = current_time;
     
-    last_request_time = current_time;
-    return false;
+    // Clean up old entries from the map to prevent it from growing indefinitely
+    // Remove entries older than 10x the rate limit time
+    if (client_last_call.size() > 50) { // Trigger cleanup when map size exceeds a threshold
+        for (auto it = client_last_call.cbegin(); it != client_last_call.cend();) {
+            if (current_time - it->second > (API_RATE_LIMIT_MS * 10)) {
+                it = client_last_call.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+
+    return false; // Not rate limited
 }
 
 String WebServerManager::getClientIP(AsyncWebServerRequest* request) {
