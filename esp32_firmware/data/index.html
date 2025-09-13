@@ -12,8 +12,16 @@
         <header class="header">
             <h1><i class="fas fa-microchip"></i> BMCU370 Interface</h1>
             <div class="status-indicator" id="connectionStatus">
-                <span class="status-dot" id="statusDot"></span>
-                <span id="statusText">Connecting...</span>
+                <div class="connection-status-item">
+                    <span>Interface:</span>
+                    <span class="status-dot" id="wsStatusDot"></span>
+                    <span id="wsStatusText">Connecting...</span>
+                </div>
+                <div class="connection-status-item">
+                    <span>BMCU:</span>
+                    <span class="status-dot" id="bmcuStatusDot"></span>
+                    <span id="bmcuStatusText">--</span>
+                </div>
             </div>
         </header>
 
@@ -39,13 +47,13 @@
             <!-- Dashboard Tab -->
             <div class="tab-content active" id="dashboard">
                 <div class="dashboard-grid">
-                    <!-- System Overview -->
+                    <!-- BMCU Status -->
                     <div class="card system-overview">
-                        <h3><i class="fas fa-info-circle"></i> System Overview</h3>
+                        <h3><i class="fas fa-info-circle"></i> BMCU Status</h3>
                         <div class="system-info">
                             <div class="info-item">
-                                <label>Version:</label>
-                                <span id="systemVersion">--</span>
+                                <label>BMCU Version:</label>
+                                <span id="bmcuVersion">--</span>
                             </div>
                             <div class="info-item">
                                 <label>Uptime:</label>
@@ -259,7 +267,7 @@
             <div class="tab-content" id="firmware">
                 <div class="firmware-grid">
                     <div class="card">
-                        <h3><i class="fas fa-microchip"></i> Current Firmware</h3>
+                        <h3><i class="fas fa-microchip"></i> ESP32 Firmware</h3>
                         <div class="firmware-info">
                             <div class="info-item">
                                 <label>Version:</label>

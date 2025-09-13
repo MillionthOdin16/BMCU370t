@@ -216,19 +216,23 @@ class BMCU370WebInterface {
     handleWebSocketMessage(data) {
         if (data.error) {
             this.showToast(data.error, 'error');
+            // Check for specific error messages that imply disconnection
+            if (data.error.toLowerCase().includes('not connected')) {
+                this.updateBmcuStatus(false);
+            }
             return;
         }
         
         if (data.system) {
-            this.statusData = data;
-            this.updateDashboard();
+            // Receiving system data implies the BMCU is connected
+            this.updateBmcuStatus(true, data);
         }
     }
 
     updateConnectionStatus(connected) {
-        this.isConnected = connected;
-        const statusDot = document.getElementById('statusDot');
-        const statusText = document.getElementById('statusText');
+        this.isWsConnected = connected;
+        const statusDot = document.getElementById('wsStatusDot');
+        const statusText = document.getElementById('wsStatusText');
         
         if (connected) {
             statusDot.className = 'status-dot connected';
@@ -236,7 +240,25 @@ class BMCU370WebInterface {
         } else {
             statusDot.className = 'status-dot';
             statusText.textContent = 'Disconnected';
+            // If websocket disconnects, assume BMCU is also disconnected from our view
+            this.updateBmcuStatus(false);
         }
+    }
+
+    updateBmcuStatus(connected, data = null) {
+        const statusDot = document.getElementById('bmcuStatusDot');
+        const statusText = document.getElementById('bmcuStatusText');
+
+        if (connected) {
+            statusDot.className = 'status-dot connected';
+            statusText.textContent = 'Connected';
+            this.statusData = data;
+        } else {
+            statusDot.className = 'status-dot';
+            statusText.textContent = 'Disconnected';
+            this.statusData = null; // Clear data on disconnect
+        }
+        this.updateDashboard(); // Update dashboard with new status
     }
 
     async loadInitialData() {
@@ -245,10 +267,7 @@ class BMCU370WebInterface {
         try {
             // Load status
             const statusResponse = await this.apiCall('/api/status');
-            if (statusResponse) {
-                this.statusData = statusResponse;
-                this.updateDashboard();
-            }
+            this.updateBmcuStatus(!!statusResponse, statusResponse);
             
             // Load configuration
             const configResponse = await this.apiCall('/api/config');
@@ -259,6 +278,7 @@ class BMCU370WebInterface {
         } catch (error) {
             console.error('Error loading initial data:', error);
             this.showToast('Failed to load initial data', 'error');
+            this.updateBmcuStatus(false); // Ensure status is updated on error
         } finally {
             this.hideLoading();
         }
@@ -287,12 +307,15 @@ class BMCU370WebInterface {
     }
 
     updateDashboard() {
-        if (!this.statusData) return;
+        if (!this.statusData) {
+            this.clearBmcuData();
+            return;
+        }
         
         const { system, channels } = this.statusData;
         
-        // Update system overview
-        document.getElementById('systemVersion').textContent = system.version || '--';
+        // Update BMCU status card
+        document.getElementById('bmcuVersion').textContent = system.version || '--';
         document.getElementById('systemUptime').textContent = this.formatUptime(system.uptime || 0);
         document.getElementById('deviceType').textContent = system.device_type || '--';
         
@@ -302,6 +325,19 @@ class BMCU370WebInterface {
         
         // Update channels
         this.updateChannelsDisplay(channels || []);
+    }
+
+    clearBmcuData() {
+        // Clear BMCU status card
+        document.getElementById('bmcuVersion').textContent = 'N/A';
+        document.getElementById('systemUptime').textContent = 'N/A';
+        document.getElementById('deviceType').textContent = 'N/A';
+        const bambuBusStatus = document.getElementById('bambuBusStatus');
+        bambuBusStatus.textContent = 'N/A';
+        bambuBusStatus.className = 'status-badge';
+
+        // Clear channels display
+        this.updateChannelsDisplay([]);
     }
 
     updateChannelsDisplay(channels) {
@@ -593,17 +629,40 @@ class BMCU370WebInterface {
         }
     }
 
-    async scanWiFiNetworks() {
-        this.showLoading();
-        const result = await this.apiCall('/api/wifi/scan');
-        this.hideLoading();
-        
-        if (result && result.networks) {
-            this.displayNetworks(result.networks);
-            this.showToast(`Found ${result.count} networks`, 'success');
-        } else {
-            this.showToast('Network scan failed', 'error');
-        }
+    scanWiFiNetworks() {
+        this.showLoading('Scanning for networks...');
+        const networksList = document.getElementById('networksList');
+        networksList.innerHTML = '<div class="no-networks">Scanning...</div>';
+
+        const pollScanResults = async () => {
+            try {
+                const result = await this.apiCall('/api/wifi/scan');
+
+                if (!result) {
+                    throw new Error('No response from server');
+                }
+
+                if (result.status === 'scanning' || result.status === 'started') {
+                    // If still scanning, poll again after 2 seconds
+                    setTimeout(pollScanResults, 2000);
+                } else if (result.status === 'complete' && result.networks) {
+                    // Scan is complete
+                    this.hideLoading();
+                    this.displayNetworks(result.networks);
+                    this.showToast(`Found ${result.count} networks`, 'success');
+                } else {
+                    // Handle unexpected status or error
+                    throw new Error(result.error || 'Unknown scan error');
+                }
+            } catch (error) {
+                this.hideLoading();
+                networksList.innerHTML = '<div class="no-networks">Scan failed. Please try again.</div>';
+                this.showToast(`Network scan failed: ${error.message}`, 'error');
+            }
+        };
+
+        // Start the first poll
+        pollScanResults();
     }
 
     displayNetworks(networks) {

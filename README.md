@@ -18,9 +18,9 @@ This repository now includes a complete USB communication foundation with ESP32 
 
 ### 🌐 ESP32 Web Interface
 - **USB Host Communication**: Automatic BMCU370 device enumeration
-- **Modern Web Dashboard**: Real-time monitoring with responsive design
-- **WiFi Management**: AP mode setup and network configuration
-- **System Control**: Remote configuration, diagnostics, and firmware updates
+- **Modern Web Dashboard**: Real-time monitoring with responsive design and clear status indicators for both the web interface and the BMCU.
+- **WiFi Management**: AP mode setup and network configuration.
+- **System Control**: Remote configuration, diagnostics, and firmware updates.
 
 ### 📊 Advanced Features
 - **Historical Data Logging**: 24+ hour sensor data with trend analysis

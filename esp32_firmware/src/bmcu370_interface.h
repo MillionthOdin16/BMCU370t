@@ -4,59 +4,17 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include "config.h"
-
-// USB Host interface for BMCU370 communication
-class BMCU370_USB_Host {
-private:
-    bool initialized;
-    bool device_connected;
-    unsigned long last_connect_attempt;
-    
-    // USB device information
-    uint16_t vid, pid;
-    uint8_t interface_class, interface_subclass;
-    
-    // Communication buffers
-    char command_buffer[USB_COMMAND_BUFFER_SIZE];
-    char response_buffer[USB_RESPONSE_BUFFER_SIZE];
-    
-    // Internal methods
-    bool enumerateDevice();
-    bool openCDCInterface();
-    void closeCDCInterface();
-    bool writeCommand(const char* command);
-    int readResponse(char* buffer, size_t buffer_size, uint32_t timeout_ms);
-    
-public:
-    BMCU370_USB_Host();
-    ~BMCU370_USB_Host();
-    
-    bool init();
-    bool connect();
-    void disconnect();
-    bool isConnected() const { return device_connected; }
-    
-    // Communication methods
-    bool sendCommand(const String& cmd);
-    String readResponse(uint32_t timeout_ms = USB_TIMEOUT_MS);
-    bool sendCommandAndGetResponse(const String& cmd, String& response, uint32_t timeout_ms = USB_TIMEOUT_MS);
-    
-    // Utility methods
-    void printDeviceInfo();
-    String getLastError() const;
-};
+#include "USBHostSerial.h" // Use the new USB Host library
 
 // High-level BMCU370 interface
 class BMCU370_Interface {
 private:
-    BMCU370_USB_Host usb_host;
+    USBHostSerial bmcu_serial; // Directly use the USB Host Serial library
     JsonDocument status_cache;
     JsonDocument config_cache;
     
     unsigned long last_status_update;
     unsigned long last_config_update;
-    bool connection_state_changed;
-    bool was_connected_last_update;
     
     // Communication state
     bool device_online;
@@ -68,16 +26,18 @@ private:
     bool parseJsonResponse(const String& response, JsonDocument& doc);
     bool validateStatusResponse(const JsonDocument& doc);
     bool validateConfigResponse(const JsonDocument& doc);
-    void updateConnectionState(bool connected);
     
+    // Internal communication methods
+    bool sendCommandAndGetResponse(const String& cmd, String& response, uint32_t timeout_ms = USB_TIMEOUT_MS);
+
 public:
     BMCU370_Interface();
     ~BMCU370_Interface();
     
     // Initialization and connection
     bool init();
+    void handleUSB(); // New method to handle USB events
     bool isConnected() const { return device_online; }
-    bool wasConnectedLastUpdate() const { return was_connected_last_update; }
     
     // Status and configuration
     bool updateStatus();

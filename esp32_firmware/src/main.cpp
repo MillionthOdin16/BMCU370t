@@ -175,6 +175,9 @@ void setup() {
 
 void loop() {
     unsigned long current_time = millis();
+
+    // Handle USB host events
+    bmcu_interface.handleUSB();
     
     // Handle WiFi manager
     wifi_manager.handle();

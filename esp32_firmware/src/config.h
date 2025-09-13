@@ -55,7 +55,7 @@
 // Web server configuration
 #define WEB_SERVER_PORT            80
 #define WEBSOCKET_MAX_CLIENTS      4
-#define API_RATE_LIMIT_MS          100      // Minimum time between API calls
+#define API_RATE_LIMIT_MS          250      // Minimum time between API calls
 
 // BMCU370 USB interface configuration
 #define BMCU370_VID                0x0403   // FTDI vendor ID (example)
