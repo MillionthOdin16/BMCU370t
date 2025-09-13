@@ -1,5 +1,6 @@
 # PlatformIO build directories
 .pio/
+build-output/
 .pioenvs/
 .piolibdeps/
 

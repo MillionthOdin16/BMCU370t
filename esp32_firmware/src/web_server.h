@@ -20,6 +20,7 @@ private:
     BMCU370_Interface* bmcu_interface;
     HistoricalDataManager* history_manager;
     bool littlefs_available;
+    bool wifi_scan_requested;
     
     // Rate limiting
     std::map<String, unsigned long> client_last_call;
