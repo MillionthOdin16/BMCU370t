@@ -48,7 +48,7 @@
 
 // WiFi configuration
 #define WIFI_AP_SSID               "BMCU370-Config"
-#define WIFI_AP_PASSWORD           "bmcu370pass"
+#define WIFI_AP_PASSWORD           "bmcu370setup"
 #define WIFI_CONNECT_TIMEOUT_MS    10000    // 10 seconds
 #define WIFI_PORTAL_TIMEOUT_MS     300000   // 5 minutes in config mode
 
