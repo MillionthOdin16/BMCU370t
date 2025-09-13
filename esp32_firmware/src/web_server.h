@@ -18,6 +18,7 @@ private:
     AsyncWebSocket websocket;
     BMCU370_Interface* bmcu_interface;
     HistoricalDataManager* history_manager;
+    bool littlefs_available;
     
     // Rate limiting
     unsigned long last_api_call[WEBSOCKET_MAX_CLIENTS];
@@ -32,6 +33,7 @@ private:
     void setupRoutes();
     void setupWebSocket();
     void setupStaticFiles();
+    void setupFallbackInterface();
     
     // API handlers
     void handleGetStatus(AsyncWebServerRequest* request);
@@ -65,7 +67,7 @@ public:
     ~WebServerManager();
     
     // Initialization and control
-    bool init(BMCU370_Interface* interface, HistoricalDataManager* history = nullptr);
+    bool init(BMCU370_Interface* interface, HistoricalDataManager* history = nullptr, bool littlefs_mounted = true);
     void handle();
     
     // Status information

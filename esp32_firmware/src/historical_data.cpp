@@ -12,6 +12,12 @@ HistoricalDataManager::HistoricalDataManager()
 bool HistoricalDataManager::init() {
     ESP_LOGI(TAG, "Initializing historical data manager");
     
+    // Check if LittleFS is available
+    if (!LittleFS.begin(false)) {
+        ESP_LOGW(TAG, "LittleFS not available - historical data will be memory-only");
+        return true; // Still return true as we can function without persistent storage
+    }
+    
     // Load existing data from file
     if (LittleFS.exists(HISTORY_FILE_PATH)) {
         if (loadFromFile()) {
@@ -19,6 +25,8 @@ bool HistoricalDataManager::init() {
         } else {
             ESP_LOGW(TAG, "Failed to load historical data, starting fresh");
         }
+    } else {
+        ESP_LOGI(TAG, "No existing historical data file found, starting fresh");
     }
     
     // Clean up old data
@@ -186,6 +194,12 @@ JsonDocument HistoricalDataManager::getTrendAnalysis() {
 bool HistoricalDataManager::saveToFile() {
     if (!data_dirty) return true;
     
+    // Check if LittleFS is available before trying to save
+    if (!LittleFS.begin(false)) {
+        ESP_LOGW(TAG, "Cannot save history - LittleFS not available");
+        return false;
+    }
+    
     File file = LittleFS.open(HISTORY_FILE_PATH, "w");
     if (!file) {
         ESP_LOGE(TAG, "Failed to open history file for writing");
@@ -226,6 +240,12 @@ bool HistoricalDataManager::saveToFile() {
 }
 
 bool HistoricalDataManager::loadFromFile() {
+    // Check if LittleFS is available
+    if (!LittleFS.begin(false)) {
+        ESP_LOGW(TAG, "Cannot load history - LittleFS not available");
+        return false;
+    }
+    
     File file = LittleFS.open(HISTORY_FILE_PATH, "r");
     if (!file) {
         ESP_LOGW(TAG, "History file not found");

@@ -12,7 +12,7 @@ extern OTAManager ota_manager;
 
 WebServerManager::WebServerManager() 
     : server(WEB_SERVER_PORT), websocket("/ws"), bmcu_interface(nullptr), history_manager(nullptr),
-      last_websocket_update(0), api_request_count(0), 
+      littlefs_available(false), last_websocket_update(0), api_request_count(0), 
       websocket_message_count(0), error_count(0) {
     
     // Initialize rate limiting arrays
@@ -24,7 +24,7 @@ WebServerManager::WebServerManager()
 WebServerManager::~WebServerManager() {
 }
 
-bool WebServerManager::init(BMCU370_Interface* interface, HistoricalDataManager* history) {
+bool WebServerManager::init(BMCU370_Interface* interface, HistoricalDataManager* history, bool littlefs_mounted) {
     if (!interface) {
         ESP_LOGE(TAG, "BMCU370 interface is null");
         return false;
@@ -32,13 +32,21 @@ bool WebServerManager::init(BMCU370_Interface* interface, HistoricalDataManager*
     
     bmcu_interface = interface;
     history_manager = history;
+    littlefs_available = littlefs_mounted;
     
     ESP_LOGI(TAG, "Initializing web server on port %d", WEB_SERVER_PORT);
+    ESP_LOGI(TAG, "LittleFS available: %s", littlefs_available ? "Yes" : "No - using fallback mode");
     
     // Setup routes and handlers
     setupRoutes();
     setupWebSocket();
-    setupStaticFiles();
+    
+    // Setup static files or fallback interface
+    if (littlefs_available) {
+        setupStaticFiles();
+    } else {
+        setupFallbackInterface();
+    }
     
     // Start server
     server.begin();
@@ -145,7 +153,12 @@ void WebServerManager::setupWebSocket() {
 }
 
 void WebServerManager::setupStaticFiles() {
-    ESP_LOGI(TAG, "Setting up static file serving");
+    ESP_LOGI(TAG, "Setting up static file serving from LittleFS");
+    
+    if (!littlefs_available) {
+        ESP_LOGE(TAG, "Cannot setup static files - LittleFS not available");
+        return;
+    }
     
     // Serve static files from LittleFS
     server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html");
@@ -156,6 +169,126 @@ void WebServerManager::setupStaticFiles() {
     server.serveStatic("/img/", LittleFS, "/img/").setCacheControl("max-age=86400");
     
     ESP_LOGI(TAG, "Static file serving configured");
+}
+
+void WebServerManager::setupFallbackInterface() {
+    ESP_LOGI(TAG, "Setting up fallback web interface (no LittleFS)");
+    
+    // Serve a simple HTML page from program memory
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+        String html = "<!DOCTYPE html><html><head><title>BMCU370 Interface - Fallback Mode</title>";
+        html += "<meta name='viewport' content='width=device-width, initial-scale=1'>";
+        html += "<style>";
+        html += "body { font-family: Arial, sans-serif; margin: 20px; background: #f0f0f0; }";
+        html += ".container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; }";
+        html += ".header { text-align: center; color: #333; margin-bottom: 20px; }";
+        html += ".status { padding: 10px; margin: 10px 0; border-radius: 5px; }";
+        html += ".error { background: #ffebee; border: 1px solid #f44336; color: #c62828; }";
+        html += ".info { background: #e3f2fd; border: 1px solid #2196f3; color: #1565c0; }";
+        html += ".warning { background: #fff3e0; border: 1px solid #ff9800; color: #ef6c00; }";
+        html += "button { background: #2196f3; color: white; border: none; padding: 10px 20px; margin: 5px; border-radius: 5px; cursor: pointer; }";
+        html += "button:hover { background: #1976d2; }";
+        html += ".section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }";
+        html += "pre { background: #f5f5f5; padding: 10px; border-radius: 3px; overflow-x: auto; font-size: 12px; }";
+        html += ".refresh-btn { float: right; }";
+        html += "</style></head><body>";
+        
+        html += "<div class='container'>";
+        html += "<div class='header'>";
+        html += "<h1>🔧 BMCU370 Interface</h1>";
+        html += "<h3>Fallback Mode - LittleFS Not Available</h3>";
+        html += "<button class='refresh-btn' onclick='location.reload()'>🔄 Refresh</button>";
+        html += "</div>";
+        
+        html += "<div class='status error'>";
+        html += "<strong>⚠️ Limited Functionality:</strong> LittleFS filesystem is not mounted. Only basic API functionality is available.";
+        html += "</div>";
+        
+        html += "<div class='section'>";
+        html += "<h3>📡 Network Information</h3>";
+        html += "<p><strong>WiFi Status:</strong> <span id='wifi-status'>Checking...</span></p>";
+        html += "<p><strong>IP Address:</strong> <span id='ip-address'>Checking...</span></p>";
+        html += "<p><strong>Access Point:</strong> BMCU370-Config (password: bmcu370pass)</p>";
+        html += "</div>";
+        
+        html += "<div class='section'>";
+        html += "<h3>🔌 BMCU370 Connection</h3>";
+        html += "<p><strong>Status:</strong> <span id='bmcu-status'>Checking...</span></p>";
+        html += "<button onclick='checkBMCU()'>🔍 Check Connection</button>";
+        html += "<button onclick='resetBMCU()'>🔄 Reset BMCU370</button>";
+        html += "</div>";
+        
+        html += "<div class='section'>";
+        html += "<h3>📊 API Endpoints</h3>";
+        html += "<p>Since the full web interface is not available, you can use these API endpoints directly:</p>";
+        html += "<ul>";
+        html += "<li><a href='/api/status' target='_blank'>GET /api/status</a> - System status</li>";
+        html += "<li><a href='/api/config' target='_blank'>GET /api/config</a> - Configuration</li>";
+        html += "<li><a href='/api/wifi/status' target='_blank'>GET /api/wifi/status</a> - WiFi status</li>";
+        html += "<li><a href='/api/logs' target='_blank'>GET /api/logs</a> - System logs</li>";
+        html += "</ul>";
+        html += "</div>";
+        
+        html += "<div class='section'>";
+        html += "<h3>🛠️ Troubleshooting</h3>";
+        html += "<div class='info'>";
+        html += "<strong>To fix LittleFS issue:</strong>";
+        html += "<ol>";
+        html += "<li>Reflash the LittleFS partition: <code>esptool.py write_flash 0x310000 littlefs.bin</code></li>";
+        html += "<li>Use lower baud rate if flashing fails: <code>--baud 460800</code></li>";
+        html += "<li>Try complete firmware reflash with partition table</li>";
+        html += "</ol>";
+        html += "</div>";
+        html += "<button onclick='showLogs()'>📋 Show System Logs</button>";
+        html += "<pre id='logs' style='display:none;'></pre>";
+        html += "</div>";
+        html += "</div>";
+        
+        // JavaScript for functionality
+        html += "<script>";
+        html += "function updateStatus() {";
+        html += "  fetch('/api/wifi/status').then(r => r.json()).then(d => {";
+        html += "    document.getElementById('wifi-status').textContent = d.status || 'Unknown';";
+        html += "    document.getElementById('ip-address').textContent = d.ip || 'Unknown';";
+        html += "  }).catch(() => {";
+        html += "    document.getElementById('wifi-status').textContent = 'Error';";
+        html += "    document.getElementById('ip-address').textContent = 'Error';";
+        html += "  });";
+        html += "  fetch('/api/status').then(r => r.json()).then(d => {";
+        html += "    document.getElementById('bmcu-status').textContent = d.connected ? 'Connected ✅' : 'Disconnected ❌';";
+        html += "  }).catch(() => {";
+        html += "    document.getElementById('bmcu-status').textContent = 'No Response ❌';";
+        html += "  });";
+        html += "}";
+        html += "function checkBMCU() { document.getElementById('bmcu-status').textContent = 'Checking...'; updateStatus(); }";
+        html += "function resetBMCU() {";
+        html += "  if (!confirm('Reset BMCU370 device?')) return;";
+        html += "  fetch('/api/system', { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: 'action=reset_bmcu370' })";
+        html += "  .then(r => r.json()).then(d => alert(d.success ? 'Reset command sent' : 'Reset failed: ' + (d.error || 'Unknown error')))";
+        html += "  .catch(err => alert('Reset failed: ' + err));";
+        html += "}";
+        html += "function showLogs() {";
+        html += "  const logsElement = document.getElementById('logs');";
+        html += "  if (logsElement.style.display === 'none') {";
+        html += "    fetch('/api/logs').then(r => r.json()).then(d => {";
+        html += "      logsElement.textContent = JSON.stringify(d, null, 2);";
+        html += "      logsElement.style.display = 'block';";
+        html += "    }).catch(err => {";
+        html += "      logsElement.textContent = 'Failed to load logs: ' + err;";
+        html += "      logsElement.style.display = 'block';";
+        html += "    });";
+        html += "  } else {";
+        html += "    logsElement.style.display = 'none';";
+        html += "  }";
+        html += "}";
+        html += "updateStatus(); setInterval(updateStatus, 10000);";
+        html += "</script>";
+        html += "</body></html>";
+        
+        request->send(200, "text/html", html);
+    });
+    
+    ESP_LOGI(TAG, "Fallback interface configured");
 }
 
 void WebServerManager::handleGetStatus(AsyncWebServerRequest* request) {

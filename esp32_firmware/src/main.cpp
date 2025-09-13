@@ -47,11 +47,22 @@ void setup() {
 #endif
     
     // Initialize file system for web interface
-    if (!LittleFS.begin(true)) {
+    bool littlefs_mounted = LittleFS.begin(true);
+    if (!littlefs_mounted) {
         Serial.println("ERROR: Failed to initialize file system");
-        // Continue without LittleFS - can use AP mode for configuration
+        Serial.println("Web interface will use fallback mode (API only)");
     } else {
-        Serial.println("File system initialized");
+        Serial.println("File system initialized successfully");
+        // List files in LittleFS for debugging
+        File root = LittleFS.open("/");
+        if (root && root.isDirectory()) {
+            Serial.println("LittleFS contents:");
+            File file = root.openNextFile();
+            while (file) {
+                Serial.printf("  %s (%d bytes)\n", file.name(), file.size());
+                file = root.openNextFile();
+            }
+        }
     }
     
     // Initialize USB host interface
@@ -87,8 +98,8 @@ void setup() {
     // Start OTA after WiFi is connected
     ota_manager.begin();
     
-    // Initialize web server
-    web_server.init(&bmcu_interface, &history_manager);
+    // Initialize web server (pass LittleFS status)
+    web_server.init(&bmcu_interface, &history_manager, littlefs_mounted);
     
     Serial.println("=== Initialization Complete ===");
     Serial.print("WiFi Status: ");
