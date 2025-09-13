@@ -160,8 +160,9 @@ jobs:
         echo "Branch: ${{ github.ref_name }}" >> firmware-artifacts/esp32/build_info.txt
         echo "" >> firmware-artifacts/esp32/build_info.txt
         echo "Build Environment: esp32s3" >> firmware-artifacts/esp32/build_info.txt
-        echo "Platform: ESP32-S3" >> firmware-artifacts/esp32/build_info.txt
-        echo "Features: USB Host, Web Server, WiFi, OTA Updates, Historical Data" >> firmware-artifacts/esp32/build_info.txt
+        echo "Platform: ESP32-S3 (4MB Flash + 2MB PSRAM)" >> firmware-artifacts/esp32/build_info.txt
+        echo "Features: USB Host, Web Server, WiFi, OTA Updates, Historical Data, PSRAM Support" >> firmware-artifacts/esp32/build_info.txt
+        echo "Flash Mode: DIO, 80MHz" >> firmware-artifacts/esp32/build_info.txt
         echo "" >> firmware-artifacts/esp32/build_info.txt
         
         # Get memory usage
@@ -170,33 +171,38 @@ jobs:
         
         # Create flash instructions
         {
-          echo "ESP32-S3 Firmware Flash Instructions"
-          echo "===================================="
+          echo "ESP32-S3 Firmware Flash Instructions (4MB Flash + 2MB PSRAM)"
+          echo "============================================================="
           echo ""
-          echo "Prerequisites:"
-          echo "- ESP32-S3 development board with USB-OTG capability"
+          echo "Hardware Requirements:"
+          echo "- ESP32-S3 with 4MB Flash + 2MB PSRAM (OPI mode)"
+          echo "- USB-OTG capability for BMCU370 communication"
           echo "- esptool.py installed: pip install esptool"
           echo ""
-          echo "Recommended Flash Command (complete):"
-          echo "esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 write_flash -z \\"
+          echo "Recommended Flash Command (complete firmware):"
+          echo "esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \\"
+          echo "  write_flash --flash_mode dio --flash_freq 80m --flash_size 4MB \\"
           echo "  0x0000 esp32_bootloader.bin \\"
           echo "  0x8000 esp32_partitions.bin \\"
           echo "  0x10000 esp32_firmware.bin \\"
-          echo "  0x290000 esp32_littlefs.bin"
+          echo "  0x310000 esp32_littlefs.bin"
           echo ""
           echo "If LittleFS flashing fails, try these alternatives:"
           echo ""
-          echo "1. Flash firmware only:"
-          echo "esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 write_flash -z \\"
+          echo "1. Flash main firmware only:"
+          echo "esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \\"
+          echo "  write_flash --flash_mode dio --flash_freq 80m \\"
           echo "  0x0000 esp32_bootloader.bin \\"
           echo "  0x8000 esp32_partitions.bin \\"
           echo "  0x10000 esp32_firmware.bin"
           echo ""
           echo "2. Flash LittleFS separately with lower baud rate:"
-          echo "esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 460800 write_flash 0x290000 esp32_littlefs.bin"
+          echo "esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 460800 \\"
+          echo "  write_flash --flash_mode dio 0x310000 esp32_littlefs.bin"
           echo ""
-          echo "3. Skip LittleFS (web interface will work via REST API):"
-          echo "esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 write_flash -z 0x10000 esp32_firmware.bin"
+          echo "3. Skip LittleFS (web interface works via REST API):"
+          echo "esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \\"
+          echo "  write_flash --flash_mode dio 0x10000 esp32_firmware.bin"
           echo ""
           echo "Partition Layout (Optimized):"
           echo "- App0: 0x10000-0x14FFFF (1.25MB)"

@@ -1,23 +1,41 @@
-# ESP32 BMCU370 Web Interface
+# ESP32-S3 BMCU370 Web Interface
 
-This is the ESP32 firmware that provides a web-based interface for monitoring and controlling the BMCU370 device via USB communication.
+Complete web-based interface for BMCU370 filament monitoring via ESP32-S3 USB host communication.
 
-## Features
+## ESP32-S3 Hardware Requirements ✅
 
-- **USB Host Communication**: ESP32-S3 communicates with BMCU370 via USB CDC-ACM
-- **Web Interface**: Beautiful responsive web interface accessible via WiFi
-- **Real-time Updates**: WebSocket-based real-time status monitoring
-- **Configuration Management**: Remote parameter configuration
-- **WiFi Management**: Easy WiFi setup and configuration
-- **System Control**: Device reset, DFU mode entry, and diagnostics
+This firmware is **optimized specifically for ESP32-S3** with:
+- **4MB Flash Memory** (confirmed by your hardware)  
+- **2MB PSRAM** (OPI mode for enhanced buffer capacity)
+- **USB OTG Support** (native ESP32-S3 capability for BMCU370 communication)
+- **WiFi + Bluetooth** (dual-core processing)
 
-## Hardware Requirements
+Your hardware reports: `ESP32-S3 (QFN56) (rev 0.1), Wi-Fi, BT 5 (LE), Dual Core + LP Core, 240MHz, Embedded Flash 4MB, XMC, Embedded PSRAM 2MB, AP_3v3` ✅
 
-- **ESP32-S3 Development Board** (with native USB host support)
-  - Recommended: ESP32-S3-DevKitC-1
-  - 240MHz dual-core, 512KB SRAM, WiFi
-- **USB-C Cable** for connecting to BMCU370
-- **Power Supply** (5V via USB or external)
+## Key ESP32-S3 Optimizations
+
+### 🔧 **Hardware-Specific Configuration**
+- **Correct board definition** for 4MB+PSRAM variant
+- **DIO flash mode** at 80MHz for optimal performance  
+- **OPI PSRAM support** with automatic cache management
+- **USB OTG host mode** for BMCU370 CDC-ACM communication
+
+### 🗂️ **Optimized Memory Layout** 
+```
+Flash Memory (4MB):
+├── App0 (Primary): 1.5MB (plenty of room for features)
+├── App1 (OTA):     1.5MB (full OTA update support)  
+├── LittleFS:       832KB (web interface files)
+└── NVS + Other:    ~160KB (configuration & system)
+
+PSRAM (2MB):
+└── Large JSON buffers, web interface caching, USB communication buffers
+```
+
+### 📦 **Memory Usage**
+- **Flash**: 950KB/1536KB (61.0% - excellent headroom)
+- **RAM**: 803KB dynamic + 320KB static 
+- **PSRAM**: Available for expansion (historical data, large responses)
 
 ## Firmware Features
 

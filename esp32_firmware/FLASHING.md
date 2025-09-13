@@ -1,4 +1,10 @@
-# ESP32-S3 Flashing Instructions
+# ESP32-S3 Flashing Instructions (4MB Flash + 2MB PSRAM)
+
+## Hardware Compatibility
+This firmware is optimized for ESP32-S3 with:
+- **4MB Flash Memory** (confirmed by your chip)
+- **2MB PSRAM** (OPI mode)
+- **USB OTG Support** for BMCU370 communication
 
 ## LittleFS Flashing Issues - Solutions
 
@@ -9,26 +15,41 @@ Failed to flashDeflBlock
 Flash file1 failed...
 ```
 
-Try these solutions:
+### Solution 1: Use Optimized ESP32-S3 Configuration
+The firmware now includes ESP32-S3 specific optimizations:
+- **Correct board definition** for 4MB Flash + 2MB PSRAM
+- **Optimized partition table** with proper sector alignment
+- **PSRAM support** for larger buffers and better performance
 
-### Solution 1: Use Optimized Partition Table
-The firmware now includes an optimized partition table (`partitions.csv`) that allocates 1MB for LittleFS instead of 1.4MB, reducing flashing issues.
+### Solution 2: Flash with Correct Parameters
+For ESP32-S3 4MB Flash, use these specific parameters:
+```bash
+# Complete firmware flash (recommended)
+esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \
+  write_flash --flash_mode dio --flash_freq 80m --flash_size 4MB \
+  0x0 bootloader.bin 0x8000 partitions.bin 0x10000 firmware.bin
+```
 
-### Solution 2: Flash in Stages
+### Solution 3: Stage Flashing for Problematic Connections
 1. **Flash main firmware first**:
    ```bash
-   esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 write_flash 0x1000 bootloader.bin 0x8000 partitions.bin 0x10000 firmware.bin
+   esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 \
+     write_flash --flash_mode dio --flash_freq 80m \
+     0x10000 firmware.bin
    ```
 
 2. **Flash LittleFS separately** (if needed):
    ```bash
-   esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 921600 write_flash 0x290000 littlefs.bin
+   esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 460800 \
+     write_flash --flash_mode dio 0x310000 littlefs.bin
    ```
 
-### Solution 3: Lower Baud Rate
-If flashing still fails, try reducing the baud rate:
+### Solution 4: Lower Baud Rate for Stability
+If flashing still fails, reduce baud rate:
 ```bash
-esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 460800 write_flash 0x290000 littlefs.bin
+esptool.py --chip esp32s3 --port /dev/ttyUSB0 --baud 115200 \
+  write_flash --flash_mode dio --flash_freq 80m --flash_size 4MB \
+  0x0 bootloader.bin 0x8000 partitions.bin 0x10000 firmware.bin
 ```
 
 ### Solution 4: PlatformIO Commands
@@ -47,11 +68,32 @@ The web interface will work without LittleFS initially. You can:
 2. Upload web files via the web interface later
 3. Or access the device via IP address and use the REST API
 
-## Memory Layout
-- **App0**: 0x10000 - 0x14FFFF (1.25MB)
-- **App1**: 0x150000 - 0x28FFFF (1.25MB) 
-- **LittleFS**: 0x290000 - 0x38FFFF (1MB)
-- **Core Dump**: 0x390000 - 0x39FFFF (64KB)
+## Memory Layout (ESP32-S3 4MB Flash + 2MB PSRAM)
+**Flash Memory (4MB total):**
+- **Bootloader**: 0x0 - 0x8FFF (36KB)
+- **Partition Table**: 0x8000 - 0x8FFF (4KB)
+- **NVS**: 0x9000 - 0xDFFF (20KB)
+- **OTA Data**: 0xE000 - 0xFFFF (8KB)
+- **App0** (Primary): 0x10000 - 0x18FFFF (1.5MB)
+- **App1** (OTA): 0x190000 - 0x30FFFF (1.5MB) 
+- **LittleFS**: 0x310000 - 0x3DFFFF (832KB)
+- **Core Dump**: 0x3E0000 - 0x3EFFFF (64KB)
+
+**PSRAM (2MB):**
+- Used for large JSON buffers and web interface caching
+- Automatically managed by ESP32-S3 firmware
+
+**Memory Usage:**
+- Flash: 950KB (61.0% of app partition)
+- RAM: 803KB dynamic + 320KB static
+- PSRAM: Available for buffer expansion
+
+## Hardware Verification
+Your ESP32-S3 should report:
+```
+Chip features: Wi-Fi, BT 5 (LE), Dual Core + LP Core, 240MHz, 
+Embedded Flash 4MB, XMC, Embedded PSRAM 2MB, AP_3v3
+```
 
 ## Default Access
 After successful firmware flash:

@@ -25,15 +25,30 @@ bool system_ready = false;
 
 void setup() {
     Serial.begin(115200);
-    Serial.println("\n=== ESP32 BMCU370 Web Interface ===");
+    Serial.println("\n=== ESP32-S3 BMCU370 Web Interface ===");
     Serial.println("Version: " + String(BMCU370_INTERFACE_VERSION));
+    
+    // Display hardware information
+    Serial.printf("ESP32-S3 Chip: %s\n", ESP.getChipModel());
+    Serial.printf("Flash Size: %d MB\n", ESP.getFlashChipSize() / (1024 * 1024));
+    Serial.printf("Free Heap: %d bytes\n", ESP.getFreeHeap());
+    
+#ifdef BOARD_HAS_PSRAM
+    if (psramFound()) {
+        Serial.printf("PSRAM Found: %d MB\n", ESP.getPsramSize() / (1024 * 1024));
+        Serial.printf("Free PSRAM: %d bytes\n", ESP.getFreePsram());
+    } else {
+        Serial.println("WARNING: PSRAM not found - expected 2MB PSRAM");
+    }
+#endif
     
     // Initialize file system for web interface
     if (!LittleFS.begin(true)) {
         Serial.println("ERROR: Failed to initialize file system");
-        return;
+        // Continue without LittleFS - can use AP mode for configuration
+    } else {
+        Serial.println("File system initialized");
     }
-    Serial.println("File system initialized");
     
     // Initialize USB host interface
     if (!bmcu_interface.init()) {

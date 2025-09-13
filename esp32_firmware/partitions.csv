@@ -1,8 +1,9 @@
 # Name,   Type, SubType, Offset,  Size, Flags
-# Optimized partition table for ESP32-S3 4MB with smaller LittleFS
+# Optimized partition table for ESP32-S3 4MB Flash + 2MB PSRAM
+# Total 4MB (4,194,304 bytes) with proper sector alignment
 nvs,      data, nvs,     0x9000,  0x5000,
 otadata,  data, ota,     0xe000,  0x2000,
-app0,     app,  ota_0,   0x10000, 0x140000,
-app1,     app,  ota_1,   0x150000,0x140000,
-littlefs, data, spiffs,  0x290000,0x100000,
-coredump, data, coredump,0x390000,0x10000,
+app0,     app,  ota_0,   0x10000, 0x180000,
+app1,     app,  ota_1,   0x190000,0x180000,
+littlefs, data, spiffs,  0x310000,0xD0000,
+coredump, data, coredump,0x3E0000,0x10000,

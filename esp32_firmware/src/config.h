@@ -12,10 +12,16 @@
 #define USB_TIMEOUT_MS              1000    // USB communication timeout
 #define USB_RETRY_DELAY_MS          2000    // Delay between USB connection retries
 
-// Buffer sizes
-#define USB_COMMAND_BUFFER_SIZE     256     // Command buffer size
-#define USB_RESPONSE_BUFFER_SIZE    2048    // Response buffer size (for large JSON)
-#define JSON_BUFFER_SIZE            4096    // JSON document buffer size
+// Buffer sizes - optimized for ESP32-S3 with PSRAM
+#ifdef BOARD_HAS_PSRAM
+#define USB_COMMAND_BUFFER_SIZE     512     // Larger command buffer with PSRAM
+#define USB_RESPONSE_BUFFER_SIZE    4096    // Larger response buffer for complex JSON
+#define JSON_BUFFER_SIZE            8192    // Larger JSON document buffer
+#else
+#define USB_COMMAND_BUFFER_SIZE     256     // Standard command buffer size
+#define USB_RESPONSE_BUFFER_SIZE    2048    // Standard response buffer size
+#define JSON_BUFFER_SIZE            4096    // Standard JSON document buffer size
+#endif
 
 // WiFi configuration
 #define WIFI_AP_SSID               "BMCU370-Config"
