@@ -72,27 +72,31 @@ uint16_t get_now_BambuBus_device_type()
 
 void reset_filament_meters(int num)
 {
-    if (num < 4)
+    if (num >= 0 && num < 4) {
         data_save.filament[num].meters = 0;
+    }
 }
+
 void add_filament_meters(int num, float meters)
 {
-    if (num < 4)
+    if (num >= 0 && num < 4 && meters >= 0.0f)
     {
         if ((data_save.filament[num].motion_set == AMS_filament_motion::on_use) || (data_save.filament[num].motion_set == AMS_filament_motion::need_pull_back))
             data_save.filament[num].meters += meters;
     }
 }
+
 float get_filament_meters(int num)
 {
-    if (num < 4)
+    if (num >= 0 && num < 4)
         return data_save.filament[num].meters;
     else
-        return 0;
+        return 0.0f;
 }
+
 void set_filament_online(int num, bool if_online)
 {
-    if (num < 4)
+    if (num >= 0 && num < 4)
     {
         if (if_online)
         {
@@ -103,9 +107,6 @@ void set_filament_online(int num, bool if_online)
             data_save.filament[num].statu = AMS_filament_stu::offline;
             set_filament_motion(num, AMS_filament_motion::idle);
         }
-    }
-    else
-    {
     }
 }
 

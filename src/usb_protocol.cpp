@@ -335,10 +335,35 @@ void usb_protocol_run(void) {
                 process_received_data();
             }
         } else {
-            // Buffer full - clear it to prevent deadlock
-            DEBUG_MY("USB Protocol: RX buffer overflow, clearing\n");
-            usb_rx_pos = 0;
-            usb_rx_buffer[0] = '\0';
+            // Buffer full - try to preserve partial commands by shifting buffer
+            DEBUG_MY("USB Protocol: RX buffer overflow, attempting recovery\n");
+            
+            // Look for the last complete line/command separator
+            int last_newline = -1;
+            for (int i = usb_rx_pos - 1; i >= 0; i--) {
+                if (usb_rx_buffer[i] == '\n' || usb_rx_buffer[i] == '\r') {
+                    last_newline = i;
+                    break;
+                }
+            }
+            
+            if (last_newline > 0) {
+                // Preserve data after the last complete command
+                int preserve_len = usb_rx_pos - last_newline - 1;
+                if (preserve_len > 0 && preserve_len < USB_RX_BUFFER_SIZE / 2) {
+                    memmove(usb_rx_buffer, &usb_rx_buffer[last_newline + 1], preserve_len);
+                    usb_rx_pos = preserve_len;
+                    usb_rx_buffer[usb_rx_pos] = '\0';
+                    DEBUG_MY("USB Protocol: Buffer recovered, preserved bytes\n");
+                } else {
+                    usb_rx_pos = 0;
+                    usb_rx_buffer[0] = '\0';
+                }
+            } else {
+                // No recoverable data, clear buffer
+                usb_rx_pos = 0;
+                usb_rx_buffer[0] = '\0';
+            }
             error_count++;
         }
         

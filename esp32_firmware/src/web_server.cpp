@@ -810,6 +810,24 @@ void WebServerManager::handleSystemControl(AsyncWebServerRequest* request) {
     
     String action = request->getParam("action", true)->value();
     
+    // Input validation for action parameter
+    if (action.length() == 0 || action.length() > 50) {
+        error_count++;
+        request->send(400, "application/json", "{\"error\":\"Invalid action parameter length\"}");
+        return;
+    }
+    
+    // Sanitize action - only allow alphanumeric and underscore
+    for (int i = 0; i < action.length(); i++) {
+        char c = action[i];
+        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || 
+              (c >= '0' && c <= '9') || c == '_')) {
+            error_count++;
+            request->send(400, "application/json", "{\"error\":\"Invalid characters in action parameter\"}");
+            return;
+        }
+    }
+    
     if (action == "reset_bmcu370") {
         if (bmcu_interface && bmcu_interface->isConnected()) {
             bool success = bmcu_interface->resetDevice();
@@ -838,7 +856,7 @@ void WebServerManager::handleSystemControl(AsyncWebServerRequest* request) {
         ESP.restart();
     } else {
         error_count++;
-        request->send(400, "application/json", "{\"error\":\"Unknown action\"}");
+        request->send(400, "application/json", "{\"error\":\"Unknown action: only reset_bmcu370, dfu_mode, and reset_esp32 are supported\"}");
     }
     
     api_request_count++;
@@ -871,6 +889,28 @@ void WebServerManager::handleWiFiConnect(AsyncWebServerRequest* request) {
     
     String ssid = request->getParam("ssid", true)->value();
     String password = request->getParam("password", true)->value();
+    
+    // Input validation
+    if (ssid.length() == 0 || ssid.length() > 32) {
+        error_count++;
+        request->send(400, "application/json", "{\"error\":\"Invalid SSID length (1-32 characters required)\"}");
+        return;
+    }
+    
+    if (password.length() > 63) {
+        error_count++;
+        request->send(400, "application/json", "{\"error\":\"Password too long (maximum 63 characters)\"}");
+        return;
+    }
+    
+    // Sanitize input - remove any control characters
+    for (int i = 0; i < ssid.length(); i++) {
+        if (ssid[i] < 32 || ssid[i] == 127) {
+            error_count++;
+            request->send(400, "application/json", "{\"error\":\"Invalid characters in SSID\"}");
+            return;
+        }
+    }
     
     ESP_LOGI(TAG, "WiFi connection request for SSID: %s", ssid.c_str());
     
