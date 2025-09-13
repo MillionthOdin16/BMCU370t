@@ -67,7 +67,7 @@ bool BMCU370_USB_Host::connect() {
     // 4. Configure communication parameters
     
     // Placeholder: simulate connection attempt
-    device_connected = true; // Will be true when real hardware is connected
+    device_connected = enumerateDevice(); // Will be true when real hardware is connected
     
     if (device_connected) {
         ESP_LOGI(TAG, "Successfully connected to BMCU370");
