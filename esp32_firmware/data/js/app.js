@@ -321,6 +321,9 @@ class BMCU370WebInterface {
                 this.updateDashboard();
             }
             
+            // Wait a bit before loading the config to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, 500));
+
             // Load configuration
             const configResponse = await this.apiCall('/api/config');
             if (configResponse) {
@@ -371,9 +374,9 @@ class BMCU370WebInterface {
         if (!this.statusData) return;
 
         const { system, channels } = this.statusData;
-        const isBmcuConnected = system && (system.bambubus_status === 'online' || system.bambubus_status === 'unreachable');
+        const isBmcuConnected = system && system.bambubus_status === 'online';
         
-        if (isBmcuConnected && system.bambubus_status !== 'unreachable') {
+        if (isBmcuConnected) {
             document.getElementById('systemVersion').textContent = system.version || '--';
             document.getElementById('systemUptime').textContent = this.formatUptime(system.uptime || 0);
             document.getElementById('deviceType').textContent = system.device_type || '--';
