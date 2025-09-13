@@ -413,16 +413,90 @@ body {
 }
 
 .network-item {
-    padding: 10px;
+    padding: 12px;
     border: 1px solid #e1e8ed;
-    border-radius: 5px;
-    margin-bottom: 5px;
+    border-radius: 8px;
+    margin-bottom: 8px;
     cursor: pointer;
-    transition: background 0.3s ease;
+    transition: all 0.3s ease;
+    background: #ffffff;
 }
 
 .network-item:hover {
     background: #f8f9fa;
+    border-color: #3498db;
+    transform: translateY(-1px);
+}
+
+.network-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.network-name {
+    font-weight: 600;
+    color: #2c3e50;
+    font-size: 1rem;
+}
+
+.network-details {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+}
+
+.network-encryption {
+    font-size: 0.8rem;
+    color: #7f8c8d;
+    background: #ecf0f1;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.network-signal {
+    font-size: 0.8rem;
+    color: #27ae60;
+    font-weight: 500;
+}
+
+.no-networks {
+    padding: 20px;
+    text-align: center;
+    color: #7f8c8d;
+    font-style: italic;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+/* Network help and info styles */
+.network-help, .scan-help, .connect-help, .connect-info {
+    margin: 10px 0;
+    padding: 12px;
+    background: #e8f4fd;
+    border-left: 4px solid #3498db;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.network-help p, .connect-info p {
+    margin: 0;
+    color: #2c3e50;
+}
+
+.scan-help, .connect-help {
+    background: #f0f9ff;
+    border-left-color: #17a2b8;
+    color: #2c3e50;
+    margin-bottom: 15px;
+}
+
+.connect-info {
+    background: #f8f9fa;
+    border-left-color: #28a745;
+    margin-top: 15px;
 }
 
 /* Buttons */

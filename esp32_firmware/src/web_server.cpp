@@ -94,6 +94,10 @@ void WebServerManager::setupRoutes() {
         this->handleWiFiConnect(request);
     });
     
+    server.on("/api/wifi/status", HTTP_GET, [this](AsyncWebServerRequest* request) {
+        this->handleWiFiStatus(request);
+    });
+    
     // Historical data endpoints
     server.on("/api/history", HTTP_GET, [this](AsyncWebServerRequest* request) {
         this->handleGetHistoricalData(request);
@@ -320,10 +324,27 @@ void WebServerManager::handleSystemControl(AsyncWebServerRequest* request) {
 void WebServerManager::handleWiFiScan(AsyncWebServerRequest* request) {
     logRequest(request, "/api/wifi/scan");
     
-    wifi_manager.scanNetworks();
+    ESP_LOGI(TAG, "Starting WiFi scan...");
+    int n = WiFi.scanNetworks();
     
-    // Return a simple response for now
-    request->send(200, "application/json", "{\"message\":\"Network scan initiated, check logs for results\"}");
+    String json = "{\"networks\":[";
+    
+    if (n > 0) {
+        for (int i = 0; i < n; ++i) {
+            if (i > 0) json += ",";
+            json += "{";
+            json += "\"ssid\":\"" + WiFi.SSID(i) + "\",";
+            json += "\"rssi\":" + String(WiFi.RSSI(i)) + ",";
+            json += "\"encryption\":\"" + String(WiFi.encryptionType(i) == WIFI_AUTH_OPEN ? "Open" : "Encrypted") + "\"";
+            json += "}";
+        }
+    }
+    
+    json += "],\"count\":" + String(n) + "}";
+    
+    WiFi.scanDelete();
+    
+    request->send(200, "application/json", json);
     api_request_count++;
 }
 
@@ -347,6 +368,22 @@ void WebServerManager::handleWiFiConnect(AsyncWebServerRequest* request) {
         request->send(400, "application/json", "{\"error\":\"Failed to connect to WiFi\"}");
     }
     
+    api_request_count++;
+}
+
+void WebServerManager::handleWiFiStatus(AsyncWebServerRequest* request) {
+    logRequest(request, "/api/wifi/status");
+    
+    String json = "{";
+    json += "\"connected\":" + String(wifi_manager.isConnected() ? "true" : "false") + ",";
+    json += "\"ssid\":\"" + wifi_manager.getSSID() + "\",";
+    json += "\"ip\":\"" + wifi_manager.getIPAddress() + "\",";
+    json += "\"signal\":" + String(wifi_manager.getSignalStrength()) + ",";
+    json += "\"ap_active\":" + String(wifi_manager.isAPActive() ? "true" : "false") + ",";
+    json += "\"ap_ip\":\"" + wifi_manager.getAPIP() + "\"";
+    json += "}";
+    
+    request->send(200, "application/json", json);
     api_request_count++;
 }
 

@@ -42,6 +42,7 @@ public:
     bool connectToNetwork(const String& ssid, const String& password);
     bool isConnected() const { return wifi_connected; }
     bool isAPMode() const { return ap_mode_active; }
+    bool isAPActive() const { return ap_mode_active; }
     bool isConfigMode() const { return config_mode_active; }
     
     // Configuration

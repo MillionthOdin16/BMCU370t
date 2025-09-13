@@ -545,10 +545,52 @@ class BMCU370WebInterface {
     }
 
     async scanWiFiNetworks() {
+        this.showLoading();
         const result = await this.apiCall('/api/wifi/scan');
-        if (result) {
-            this.showToast('Network scan initiated', 'success');
+        this.hideLoading();
+        
+        if (result && result.networks) {
+            this.displayNetworks(result.networks);
+            this.showToast(`Found ${result.count} networks`, 'success');
+        } else {
+            this.showToast('Network scan failed', 'error');
         }
+    }
+
+    displayNetworks(networks) {
+        const networksList = document.getElementById('networksList');
+        
+        if (networks.length === 0) {
+            networksList.innerHTML = '<div class="no-networks">No networks found</div>';
+            return;
+        }
+        
+        networksList.innerHTML = networks.map(network => {
+            const signalBars = this.getSignalBars(network.rssi);
+            return `
+                <div class="network-item" onclick="window.bmcuInterface.selectNetwork('${network.ssid}')">
+                    <div class="network-info">
+                        <div class="network-name">${network.ssid}</div>
+                        <div class="network-details">
+                            <span class="network-encryption">${network.encryption}</span>
+                            <span class="network-signal">${signalBars} ${network.rssi} dBm</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    getSignalBars(rssi) {
+        if (rssi > -50) return '📶📶📶📶';
+        if (rssi > -60) return '📶📶📶';
+        if (rssi > -70) return '📶📶';
+        return '📶';
+    }
+
+    selectNetwork(ssid) {
+        document.getElementById('wifiSSIDInput').value = ssid;
+        this.showToast(`Selected network: ${ssid}`, 'info');
     }
 
     async connectToWiFi() {
@@ -574,18 +616,50 @@ class BMCU370WebInterface {
         this.hideLoading();
         
         if (result && result.success) {
-            this.showToast('WiFi connection successful', 'success');
+            this.showToast('WiFi connection successful! Checking status...', 'success');
             document.getElementById('wifiForm').reset();
+            
+            // Update network status after a short delay
+            setTimeout(() => {
+                this.updateNetworkStatus();
+            }, 3000);
         } else {
-            this.showToast('WiFi connection failed', 'error');
+            this.showToast(result?.error || 'WiFi connection failed', 'error');
         }
     }
 
-    updateNetworkStatus() {
-        // This would be updated via WebSocket or periodic API calls
-        // For now, show placeholder data
-        document.getElementById('wifiStatus').textContent = 'Connected';
-        document.getElementById('wifiStatus').className = 'status-badge online';
+    async updateNetworkStatus() {
+        const result = await this.apiCall('/api/wifi/status');
+        
+        if (result) {
+            // Update WiFi status
+            const statusElement = document.getElementById('wifiStatus');
+            const ssidElement = document.getElementById('wifiSSID');
+            const ipElement = document.getElementById('wifiIP');
+            const signalElement = document.getElementById('wifiSignal');
+            
+            if (result.connected) {
+                statusElement.textContent = 'Connected';
+                statusElement.className = 'status-badge online';
+                ssidElement.textContent = result.ssid || '--';
+                ipElement.textContent = result.ip || '--';
+                signalElement.textContent = result.signal ? `${result.signal} dBm` : '--';
+            } else {
+                if (result.ap_active) {
+                    statusElement.textContent = 'Config Mode (AP)';
+                    statusElement.className = 'status-badge warning';
+                    ssidElement.textContent = 'BMCU370-Config';
+                    ipElement.textContent = result.ap_ip || '--';
+                    signalElement.textContent = '--';
+                } else {
+                    statusElement.textContent = 'Disconnected';
+                    statusElement.className = 'status-badge offline';
+                    ssidElement.textContent = '--';
+                    ipElement.textContent = '--';
+                    signalElement.textContent = '--';
+                }
+            }
+        }
     }
 
     confirmAction(message, callback) {

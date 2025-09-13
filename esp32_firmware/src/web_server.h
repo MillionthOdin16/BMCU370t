@@ -41,6 +41,7 @@ private:
     void handleSystemControl(AsyncWebServerRequest* request);
     void handleWiFiScan(AsyncWebServerRequest* request);
     void handleWiFiConnect(AsyncWebServerRequest* request);
+    void handleWiFiStatus(AsyncWebServerRequest* request);
     
     // Historical data handlers
     void handleGetHistoricalData(AsyncWebServerRequest* request);

@@ -210,33 +210,44 @@
                                 <span id="wifiSignal">--</span>
                             </div>
                         </div>
-                    </div>
-
-                    <div class="card">
-                        <h3><i class="fas fa-search"></i> Network Scanner</h3>
-                        <button class="btn btn-primary" id="scanNetworks">
-                            <i class="fas fa-search"></i> Scan Networks
-                        </button>
-                        <div class="networks-list" id="networksList">
-                            <!-- Networks will be populated here -->
+                        <div class="network-help">
+                            <p><i class="fas fa-info-circle"></i> 
+                            <strong>Config Mode:</strong> You are connected to BMCU370-Config network. 
+                            Use the form below to connect to your home WiFi network.</p>
                         </div>
                     </div>
 
                     <div class="card">
-                        <h3><i class="fas fa-link"></i> WiFi Connection</h3>
+                        <h3><i class="fas fa-search"></i> Available Networks</h3>
+                        <p class="scan-help">Scan for available WiFi networks and click on one to select it:</p>
+                        <button class="btn btn-primary" id="scanNetworks">
+                            <i class="fas fa-search"></i> Scan Networks
+                        </button>
+                        <div class="networks-list" id="networksList">
+                            <div class="no-networks">Click "Scan Networks" to see available WiFi networks</div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h3><i class="fas fa-link"></i> Connect to WiFi Network</h3>
+                        <p class="connect-help">Enter your WiFi network credentials to connect the BMCU370 to your home network:</p>
                         <form id="wifiForm" class="wifi-form">
                             <div class="form-group">
                                 <label for="wifiSSIDInput">Network Name (SSID):</label>
-                                <input type="text" id="wifiSSIDInput" placeholder="Enter network name">
+                                <input type="text" id="wifiSSIDInput" placeholder="Enter network name or select from scan results">
                             </div>
                             <div class="form-group">
                                 <label for="wifiPasswordInput">Password:</label>
-                                <input type="password" id="wifiPasswordInput" placeholder="Enter password">
+                                <input type="password" id="wifiPasswordInput" placeholder="Enter WiFi password (leave blank for open networks)">
                             </div>
                             <button type="submit" class="btn btn-success">
-                                <i class="fas fa-wifi"></i> Connect
+                                <i class="fas fa-wifi"></i> Connect to Network
                             </button>
                         </form>
+                        <div class="connect-info">
+                            <p><i class="fas fa-lightbulb"></i> <strong>Tip:</strong> 
+                            After connecting successfully, the device will remember your network and connect automatically in the future.</p>
+                        </div>
                     </div>
                 </div>
             </div>
