@@ -1,0 +1,115 @@
+{
+  "wifi_configurations": {
+    "home_network": {
+      "ssid": "HomeNetwork",
+      "password": "homepassword123",
+      "security": "WPA2",
+      "channel": 6,
+      "hidden": false
+    },
+    "office_network": {
+      "ssid": "OfficeWiFi",
+      "password": "office2023!",
+      "security": "WPA3",
+      "channel": 11,
+      "hidden": false
+    },
+    "hidden_network": {
+      "ssid": "HiddenSSID",
+      "password": "hiddenpass",
+      "security": "WPA2",
+      "channel": 1,
+      "hidden": true
+    },
+    "open_network": {
+      "ssid": "OpenWiFi",
+      "password": "",
+      "security": "OPEN",
+      "channel": 3,
+      "hidden": false
+    }
+  },
+  "esp32_configurations": {
+    "default": {
+      "ap_ssid": "BMCU370-Setup",
+      "ap_password": "bmcu370setup",
+      "ap_channel": 1,
+      "ap_max_clients": 4,
+      "web_server_port": 80,
+      "websocket_update_interval": 500,
+      "status_update_interval": 1000,
+      "wifi_timeout": 30000,
+      "wifi_retry_interval": 5000
+    },
+    "production": {
+      "ap_ssid": "BMCU370-AP",
+      "ap_password": "bmcu370production",
+      "ap_channel": 6,
+      "ap_max_clients": 2,
+      "web_server_port": 80,
+      "websocket_update_interval": 1000,
+      "status_update_interval": 2000,
+      "wifi_timeout": 60000,
+      "wifi_retry_interval": 10000
+    },
+    "development": {
+      "ap_ssid": "BMCU370-Dev",
+      "ap_password": "dev123",
+      "ap_channel": 11,
+      "ap_max_clients": 8,
+      "web_server_port": 8080,
+      "websocket_update_interval": 250,
+      "status_update_interval": 500,
+      "wifi_timeout": 15000,
+      "wifi_retry_interval": 2000
+    }
+  },
+  "network_scan_results": [
+    {
+      "ssid": "HomeNetwork",
+      "rssi": -45,
+      "security": "WPA2",
+      "channel": 6
+    },
+    {
+      "ssid": "NeighborWiFi",
+      "rssi": -67,
+      "security": "WPA2",
+      "channel": 1
+    },
+    {
+      "ssid": "CafeWiFi",
+      "rssi": -78,
+      "security": "OPEN",
+      "channel": 11
+    },
+    {
+      "ssid": "OfficeWiFi",
+      "rssi": -52,
+      "security": "WPA3",
+      "channel": 11
+    }
+  ],
+  "error_scenarios": {
+    "wifi_connection_failed": {
+      "error": "Failed to connect to WiFi",
+      "code": "WIFI_CONNECT_FAILED",
+      "details": "Authentication failed or network not available"
+    },
+    "bmcu370_not_found": {
+      "error": "BMCU370 device not detected",
+      "code": "USB_DEVICE_NOT_FOUND",
+      "details": "No USB device with matching VID/PID found"
+    },
+    "communication_timeout": {
+      "error": "Communication timeout",
+      "code": "USB_TIMEOUT",
+      "details": "No response from BMCU370 within timeout period"
+    },
+    "memory_low": {
+      "error": "Low memory warning",
+      "code": "MEMORY_LOW",
+      "details": "Available heap memory below threshold"
+    }
+  }
+}

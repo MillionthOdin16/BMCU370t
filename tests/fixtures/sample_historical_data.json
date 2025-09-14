@@ -1,0 +1,111 @@
+{
+  "historical_data": {
+    "last_24_hours": [
+      {
+        "timestamp": 1640995200,
+        "data": {
+          "system": {
+            "uptime": 86400,
+            "free_heap": 45678,
+            "wifi_rssi": -45
+          },
+          "channels": [
+            {
+              "id": 0,
+              "hall_position": 1024,
+              "filament_present": true,
+              "temperature": 25.5,
+              "pressure": 1650,
+              "motion_state": "idle"
+            },
+            {
+              "id": 1,
+              "hall_position": 2048,
+              "filament_present": true,
+              "temperature": 26.1,
+              "pressure": 1700,
+              "motion_state": "feeding"
+            }
+          ]
+        }
+      },
+      {
+        "timestamp": 1640998800,
+        "data": {
+          "system": {
+            "uptime": 90000,
+            "free_heap": 44523,
+            "wifi_rssi": -47
+          },
+          "channels": [
+            {
+              "id": 0,
+              "hall_position": 1024,
+              "filament_present": true,
+              "temperature": 25.8,
+              "pressure": 1655,
+              "motion_state": "idle"
+            },
+            {
+              "id": 1,
+              "hall_position": 2100,
+              "filament_present": true,
+              "temperature": 26.3,
+              "pressure": 1720,
+              "motion_state": "retracting"
+            }
+          ]
+        }
+      }
+    ],
+    "data_points_per_hour": 12,
+    "retention_period_hours": 168,
+    "compression_enabled": true,
+    "max_data_size_bytes": 32768
+  },
+  "performance_metrics": {
+    "web_server": {
+      "max_concurrent_clients": 4,
+      "average_response_time_ms": 50,
+      "requests_per_minute": 120,
+      "memory_usage_per_client_bytes": 2048
+    },
+    "websocket": {
+      "message_frequency_ms": 500,
+      "max_message_size_bytes": 1024,
+      "buffer_size_bytes": 4096,
+      "heartbeat_interval_ms": 30000
+    },
+    "bmcu370_communication": {
+      "command_timeout_ms": 1000,
+      "retry_attempts": 3,
+      "status_update_interval_ms": 1000,
+      "usb_buffer_size_bytes": 512
+    },
+    "memory_thresholds": {
+      "heap_warning_bytes": 51200,
+      "heap_critical_bytes": 20480,
+      "psram_usage_max_percent": 80,
+      "flash_usage_max_percent": 90
+    }
+  },
+  "stress_test_scenarios": {
+    "high_load": {
+      "concurrent_clients": 8,
+      "requests_per_second": 10,
+      "test_duration_seconds": 300,
+      "expected_max_response_time_ms": 500
+    },
+    "websocket_burst": {
+      "messages_per_second": 20,
+      "message_size_bytes": 512,
+      "burst_duration_seconds": 60,
+      "expected_dropped_messages": 0
+    },
+    "memory_pressure": {
+      "large_request_size_bytes": 4096,
+      "simultaneous_requests": 4,
+      "expected_memory_recovery": true
+    }
+  }
+}
