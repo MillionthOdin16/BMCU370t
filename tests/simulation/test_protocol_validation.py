@@ -9,7 +9,13 @@ import pytest
 import json
 import time
 import asyncio
+import sys
+import os
 from unittest.mock import Mock, patch
+
+# Add the project root to Python path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+
 from tests.simulation.mock_bmcu370 import MockBMCU370
 
 
