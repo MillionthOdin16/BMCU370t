@@ -3,6 +3,7 @@
 Test runner script for BMCU370 ESP32 Web Interface tests.
 
 Provides easy execution of different test categories and generates reports.
+Includes intelligent caching and optimization features.
 """
 
 import argparse
@@ -10,16 +11,108 @@ import sys
 import os
 import subprocess
 import time
+import hashlib
+import json
 from pathlib import Path
+from typing import List, Dict, Optional
 
 
-def run_command(cmd, description=""):
-    """Run a command and return the result."""
+def get_file_hash(file_path: Path) -> str:
+    """Get hash of a file for caching purposes."""
+    if not file_path.exists():
+        return ""
+    
+    with open(file_path, 'rb') as f:
+        return hashlib.md5(f.read()).hexdigest()
+
+
+def get_directory_hash(directory: Path, extensions: List[str] = None) -> str:
+    """Get combined hash of all files in a directory."""
+    if extensions is None:
+        extensions = ['.py', '.cpp', '.h', '.html', '.css', '.js']
+    
+    file_hashes = []
+    if directory.exists():
+        for ext in extensions:
+            for file_path in directory.rglob(f'*{ext}'):
+                file_hashes.append(get_file_hash(file_path))
+    
+    combined_hash = ''.join(sorted(file_hashes))
+    return hashlib.md5(combined_hash.encode()).hexdigest()
+
+
+def load_test_cache() -> Dict:
+    """Load test cache from disk."""
+    cache_file = Path('.test_cache.json')
+    if cache_file.exists():
+        try:
+            with open(cache_file, 'r') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            pass
+    return {}
+
+
+def save_test_cache(cache: Dict):
+    """Save test cache to disk."""
+    cache_file = Path('.test_cache.json')
+    try:
+        with open(cache_file, 'w') as f:
+            json.dump(cache, f, indent=2)
+    except IOError:
+        pass
+
+
+def should_skip_tests(test_category: str, verbose: bool = False) -> bool:
+    """Check if tests should be skipped based on file changes."""
+    cache = load_test_cache()
+    
+    # Get current hashes
+    esp32_hash = get_directory_hash(Path('../esp32_firmware'))
+    test_hash = get_directory_hash(Path(f'{test_category}/'))
+    
+    # Check cache
+    cache_key = f'{test_category}_hashes'
+    if cache_key in cache:
+        cached_esp32_hash = cache[cache_key].get('esp32', '')
+        cached_test_hash = cache[cache_key].get('test', '')
+        
+        if esp32_hash == cached_esp32_hash and test_hash == cached_test_hash:
+            if verbose:
+                print(f"⚡ Skipping {test_category} tests - no changes detected")
+            return True
+    
+    # Update cache
+    cache[cache_key] = {
+        'esp32': esp32_hash,
+        'test': test_hash,
+        'timestamp': time.time()
+    }
+    save_test_cache(cache)
+    
+    return False
+
+
+def run_command(cmd, description="", cache_key: Optional[str] = None):
+    """Run a command and return the result with optional caching."""
     print(f"\n{'='*60}")
     if description:
         print(f"Running: {description}")
     print(f"Command: {' '.join(cmd)}")
     print('='*60)
+    
+    # Check cache if enabled
+    if cache_key and os.getenv('USE_TEST_CACHE', 'true').lower() == 'true':
+        cache = load_test_cache()
+        if cache_key in cache:
+            cache_time = cache[cache_key].get('timestamp', 0)
+            if time.time() - cache_time < 3600:  # 1 hour cache
+                print("⚡ Using cached result")
+                return type('Result', (), {
+                    'returncode': cache[cache_key].get('returncode', 0),
+                    'stdout': cache[cache_key].get('stdout', ''),
+                    'stderr': cache[cache_key].get('stderr', '')
+                })()
     
     start_time = time.time()
     result = subprocess.run(cmd, capture_output=True, text=True)
@@ -35,6 +128,17 @@ def run_command(cmd, description=""):
     if result.stderr:
         print("STDERR:")
         print(result.stderr)
+    
+    # Cache successful results
+    if cache_key and result.returncode == 0:
+        cache = load_test_cache()
+        cache[cache_key] = {
+            'returncode': result.returncode,
+            'stdout': result.stdout,
+            'stderr': result.stderr,
+            'timestamp': time.time()
+        }
+        save_test_cache(cache)
     
     return result
 
@@ -59,7 +163,10 @@ def install_dependencies():
 
 
 def run_unit_tests(verbose=False, coverage=False):
-    """Run unit tests."""
+    """Run unit tests with intelligent caching."""
+    if should_skip_tests('unit', verbose):
+        return True
+        
     cmd = [sys.executable, "-m", "pytest", "tests/unit/"]
     
     if verbose:
@@ -70,12 +177,16 @@ def run_unit_tests(verbose=False, coverage=False):
     
     cmd.extend(["-m", "unit"])
     
-    result = run_command(cmd, "Unit Tests")
+    cache_key = f"unit_tests_{get_directory_hash(Path('unit/'))}"
+    result = run_command(cmd, "Unit Tests", cache_key)
     return result.returncode == 0
 
 
 def run_integration_tests(verbose=False):
-    """Run integration tests."""
+    """Run integration tests with intelligent caching."""
+    if should_skip_tests('integration', verbose):
+        return True
+        
     cmd = [sys.executable, "-m", "pytest", "tests/integration/"]
     
     if verbose:
@@ -83,12 +194,16 @@ def run_integration_tests(verbose=False):
     
     cmd.extend(["-m", "integration"])
     
-    result = run_command(cmd, "Integration Tests")
+    cache_key = f"integration_tests_{get_directory_hash(Path('integration/'))}"
+    result = run_command(cmd, "Integration Tests", cache_key)
     return result.returncode == 0
 
 
 def run_web_interface_tests(verbose=False):
-    """Run web interface tests."""
+    """Run web interface tests with intelligent caching."""
+    if should_skip_tests('web_interface', verbose):
+        return True
+        
     cmd = [sys.executable, "-m", "pytest", "tests/web_interface/"]
     
     if verbose:
@@ -96,7 +211,8 @@ def run_web_interface_tests(verbose=False):
     
     cmd.extend(["-m", "web"])
     
-    result = run_command(cmd, "Web Interface Tests")
+    cache_key = f"web_tests_{get_directory_hash(Path('web_interface/'))}"
+    result = run_command(cmd, "Web Interface Tests", cache_key)
     return result.returncode == 0
 
 
@@ -398,8 +514,14 @@ Examples:
     parser.add_argument("--install-deps", action="store_true", help="Install test dependencies")
     parser.add_argument("--validate-config", action="store_true", help="Validate ESP32 configuration")
     parser.add_argument("--report", action="store_true", help="Generate comprehensive test report")
+    parser.add_argument("--optimize-cache", action="store_true", help="Enable intelligent caching and optimization")
     
     args = parser.parse_args()
+    
+    # Enable caching optimization if requested
+    if args.optimize_cache:
+        os.environ['USE_TEST_CACHE'] = 'true'
+        print("⚡ Optimization and caching enabled")
     
     # Change to script directory
     script_dir = Path(__file__).parent

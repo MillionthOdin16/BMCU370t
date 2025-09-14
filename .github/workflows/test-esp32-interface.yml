@@ -39,12 +39,32 @@ jobs:
         python-version: ${{ matrix.python-version }}
         
     - name: Cache pip dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('tests/requirements-test.txt') }}
+        key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('tests/requirements-test.txt') }}
         restore-keys: |
+          ${{ runner.os }}-pip-${{ matrix.python-version }}-
           ${{ runner.os }}-pip-
+          
+    - name: Cache pytest cache
+      uses: actions/cache@v4
+      with:
+        path: tests/.pytest_cache
+        key: ${{ runner.os }}-pytest-${{ matrix.python-version }}-${{ matrix.test-category }}-${{ hashFiles('tests/**/*.py') }}
+        restore-keys: |
+          ${{ runner.os }}-pytest-${{ matrix.python-version }}-${{ matrix.test-category }}-
+          ${{ runner.os }}-pytest-${{ matrix.python-version }}-
+          
+    - name: Cache test results for unchanged code
+      uses: actions/cache@v4
+      with:
+        path: |
+          tests/test-results.xml
+          tests/htmlcov/
+        key: ${{ runner.os }}-test-results-${{ matrix.test-category }}-${{ hashFiles('esp32_firmware/**', 'tests/${{ matrix.test-category }}/**') }}
+        restore-keys: |
+          ${{ runner.os }}-test-results-${{ matrix.test-category }}-
           
     - name: Install system dependencies
       run: |
@@ -66,10 +86,17 @@ jobs:
         cd esp32_firmware
         python validate_esp32s3.py || echo "Configuration validation completed with warnings"
         
-    - name: Run ${{ matrix.test-category }} tests
+    - name: Run ${{ matrix.test-category }} tests (optimized)
+      env:
+        USE_TEST_CACHE: 'true'
+        PYTEST_CACHE_DIR: tests/.pytest_cache
       run: |
         cd tests
-        python run_tests.py --${{ matrix.test-category }} --verbose --coverage
+        # Create cache directory if it doesn't exist
+        mkdir -p .pytest_cache
+        
+        # Use optimized test runner with caching
+        python run_tests.py --${{ matrix.test-category }} --verbose --coverage --optimize-cache
         
     - name: Upload coverage reports
       if: matrix.test-category == 'unit' && matrix.python-version == '3.11'
@@ -90,7 +117,7 @@ jobs:
           tests/test-report.html
 
   performance-tests:
-    name: Performance Tests
+    name: Performance Tests (Optimized)
     runs-on: ubuntu-latest
     needs: test-esp32-interface
     
@@ -103,15 +130,37 @@ jobs:
       with:
         python-version: '3.11'
         
-    - name: Install dependencies
+    - name: Cache pip dependencies for performance tests
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-performance-${{ hashFiles('tests/requirements-test.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-performance-
+          ${{ runner.os }}-pip-
+        
+    - name: Cache performance test results
+      uses: actions/cache@v4
+      with:
+        path: |
+          tests/performance-results/
+          tests/.pytest_cache/
+        key: ${{ runner.os }}-performance-${{ hashFiles('esp32_firmware/**', 'tests/performance/**') }}
+        restore-keys: |
+          ${{ runner.os }}-performance-
+        
+    - name: Install dependencies (cached)
       run: |
         python -m pip install --upgrade pip
         pip install -r tests/requirements-test.txt
         
-    - name: Run performance tests
+    - name: Run performance tests (with caching)
+      env:
+        USE_TEST_CACHE: 'true'
       run: |
         cd tests
-        python run_tests.py --performance --verbose
+        mkdir -p performance-results
+        python run_tests.py --performance --verbose --optimize-cache
         
     - name: Upload performance results
       if: always()
@@ -136,13 +185,31 @@ jobs:
         python-version: '3.11'
         
     - name: Set up Node.js for web tools
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v4
       with:
         node-version: '18'
+        cache: 'npm'
         
-    - name: Install web validation tools
+    - name: Cache Node.js dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.npm
+        key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-node-
+        
+    - name: Install web validation tools (cached)
       run: |
-        npm install -g html5-validator css-validator jshint
+        # Check if tools are already installed to avoid reinstallation
+        if ! command -v html5-validator &> /dev/null; then
+          npm install -g html5-validator
+        fi
+        if ! command -v css-validator &> /dev/null; then
+          npm install -g css-validator
+        fi
+        if ! command -v jshint &> /dev/null; then
+          npm install -g jshint
+        fi
         python -m pip install --upgrade pip
         pip install -r tests/requirements-test.txt
         
@@ -187,10 +254,23 @@ jobs:
       with:
         python-version: '3.11'
         
-    - name: Install security analysis tools
+    - name: Cache security tools
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/pip
+          ~/.local/bin
+        key: ${{ runner.os }}-security-tools-${{ hashFiles('tests/requirements-test.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-security-tools-
+        
+    - name: Install security analysis tools (optimized)
       run: |
         python -m pip install --upgrade pip
-        pip install bandit safety semgrep
+        # Check if tools are already cached before installing
+        if ! command -v bandit &> /dev/null || ! command -v safety &> /dev/null; then
+          pip install bandit safety semgrep
+        fi
         pip install -r tests/requirements-test.txt
         
     - name: Run Bandit security scan
@@ -219,10 +299,55 @@ jobs:
           safety-report.json
           tests/test-results.xml
 
+  docker-emulator-tests:
+    name: Docker and Emulator Tests (Optimized)
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.changed_files, 'simulation/') || contains(github.event.pull_request.changed_files, 'docker')
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      
+    - name: Cache Docker layers
+      uses: actions/cache@v4
+      with:
+        path: /tmp/.buildx-cache
+        key: ${{ runner.os }}-buildx-${{ hashFiles('tests/fixtures/Dockerfile*') }}
+        restore-keys: |
+          ${{ runner.os }}-buildx-
+          
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies (cached)
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r tests/requirements-test.txt
+        
+    - name: Run Docker and emulator tests (optimized)
+      env:
+        USE_TEST_CACHE: 'true'
+        DOCKER_BUILDKIT: 1
+      run: |
+        cd tests
+        python run_tests.py --docker --qemu --verbose --optimize-cache
+        
+    - name: Upload emulator test results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: emulator-test-results
+        path: tests/test-results.xml
+
   test-summary:
     name: Test Summary
     runs-on: ubuntu-latest
-    needs: [test-esp32-interface, performance-tests, web-interface-validation, security-analysis]
+    needs: [test-esp32-interface, performance-tests, web-interface-validation, security-analysis, docker-emulator-tests]
     if: always()
     
     steps:
