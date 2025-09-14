@@ -1,282 +1,136 @@
 {
-  "version": 1,
-  "author": "BMCU370 Test Framework",
-  "editor": "wokwi",
+  "board": "esp32-s3-devkitc-1",
+  "firmware": "esp32_firmware",
   "parts": [
     {
       "type": "board-esp32-s3-devkitc-1",
-      "id": "esp32s3",
-      "top": 0,
-      "left": 0,
+      "id": "esp32s3"
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led1",
       "attrs": {
-        "psramSize": "2",
-        "flashSize": "4"
+        "color": "red"
       }
     },
     {
       "type": "wokwi-led",
-      "id": "led_status",
-      "top": -67.2,
-      "left": 134.4,
+      "id": "led2",
       "attrs": {
-        "color": "green",
-        "label": "Status LED"
-      }
-    },
-    {
-      "type": "wokwi-led", 
-      "id": "led_error",
-      "top": -67.2,
-      "left": 182.4,
-      "attrs": {
-        "color": "red",
-        "label": "Error LED"
+        "color": "green"
       }
     },
     {
       "type": "wokwi-resistor",
-      "id": "r_status",
-      "top": -48,
-      "left": 153.6,
+      "id": "r1",
       "attrs": {
         "value": "220"
       }
     },
     {
       "type": "wokwi-resistor",
-      "id": "r_error", 
-      "top": -48,
-      "left": 201.6,
+      "id": "r2",
       "attrs": {
         "value": "220"
       }
     },
     {
       "type": "wokwi-pushbutton",
-      "id": "btn_reset",
-      "top": -105.6,
-      "left": 278.4,
-      "attrs": {
-        "color": "black",
-        "label": "Reset"
-      }
-    },
-    {
-      "type": "wokwi-pushbutton",
-      "id": "btn_config",
-      "top": -67.2,
-      "left": 278.4,
-      "attrs": {
-        "color": "blue", 
-        "label": "Config"
-      }
+      "id": "btn1"
     },
     {
       "type": "wokwi-dht22",
-      "id": "sensor_dht22",
-      "top": -134.4,
-      "left": 374.4,
-      "attrs": {
-        "temperature": "22.5",
-        "humidity": "65.2"
-      }
+      "id": "dht1"
     },
     {
       "type": "wokwi-potentiometer",
-      "id": "pot_brightness",
-      "top": -67.2,
-      "left": 470.4,
-      "attrs": {
-        "value": "512",
-        "label": "Brightness"
-      }
-    },
-    {
-      "type": "wokwi-analog-joystick",
-      "id": "joystick_control",
-      "top": -48,
-      "left": 566.4,
-      "attrs": {
-        "xValue": "512",
-        "yValue": "512"
-      }
-    },
-    {
-      "type": "wokwi-buzzer",
-      "id": "buzzer_alarm",
-      "top": -105.6,
-      "left": 662.4,
-      "attrs": {
-        "volume": "0.1"
-      }
-    },
-    {
-      "type": "wokwi-servo",
-      "id": "servo_actuator", 
-      "top": -67.2,
-      "left": 758.4,
-      "attrs": {
-        "horn": "single"
-      }
+      "id": "pot1"
     }
   ],
   "connections": [
     [
       "esp32s3:2",
-      "led_status:A",
+      "led1:A",
       "green",
       []
     ],
     [
-      "esp32s3:4", 
-      "led_error:A",
+      "esp32s3:4",
+      "led2:A",
+      "blue",
+      []
+    ],
+    [
+      "esp32s3:18",
+      "btn1:1.l",
       "red",
       []
     ],
     [
-      "led_status:C",
-      "r_status:1",
+      "esp32s3:19",
+      "dht1:SDA",
+      "yellow",
+      []
+    ],
+    [
+      "esp32s3:21",
+      "pot1:SIG",
+      "orange",
+      []
+    ],
+    [
+      "led1:C",
+      "r1:1",
       "green",
       []
     ],
     [
-      "led_error:C",
-      "r_error:1", 
-      "red",
+      "led2:C",
+      "r2:1",
+      "blue",
       []
     ],
     [
-      "r_status:2",
+      "r1:2",
       "esp32s3:GND.1",
       "black",
       []
     ],
     [
-      "r_error:2",
+      "r2:2",
       "esp32s3:GND.2",
-      "black", 
+      "black",
       []
     ],
     [
-      "esp32s3:18",
-      "btn_reset:1.l",
-      "gray",
-      []
-    ],
-    [
-      "btn_reset:2.r",
+      "btn1:2.r",
       "esp32s3:GND.3",
       "black",
       []
     ],
     [
-      "esp32s3:19",
-      "btn_config:1.l", 
-      "blue",
-      []
-    ],
-    [
-      "btn_config:2.r", 
+      "dht1:GND",
       "esp32s3:GND.4",
       "black",
       []
     ],
     [
-      "esp32s3:21",
-      "sensor_dht22:SDA",
-      "yellow",
-      []
-    ],
-    [
-      "sensor_dht22:VCC",
+      "dht1:VCC",
       "esp32s3:3V3",
       "red",
       []
     ],
     [
-      "sensor_dht22:GND",
+      "pot1:GND",
       "esp32s3:GND.5",
       "black",
       []
     ],
     [
-      "esp32s3:1",
-      "pot_brightness:SIG",
-      "orange",
-      []
-    ],
-    [
-      "pot_brightness:VCC",
+      "pot1:VCC",
       "esp32s3:3V3",
       "red",
-      []
-    ],
-    [
-      "pot_brightness:GND",
-      "esp32s3:GND.6",
-      "black",
-      []
-    ],
-    [
-      "esp32s3:3",
-      "joystick_control:VRx",
-      "purple",
-      []
-    ],
-    [
-      "esp32s3:5",
-      "joystick_control:VRy", 
-      "brown",
-      []
-    ],
-    [
-      "esp32s3:6",
-      "joystick_control:SW",
-      "white",
-      []
-    ],
-    [
-      "joystick_control:+5V",
-      "esp32s3:3V3",
-      "red",
-      []
-    ],
-    [
-      "joystick_control:GND",
-      "esp32s3:GND.7",
-      "black",
-      []
-    ],
-    [
-      "esp32s3:7",
-      "buzzer_alarm:1",
-      "cyan",
-      []
-    ],
-    [
-      "buzzer_alarm:2",
-      "esp32s3:GND.8",
-      "black",
-      []
-    ],
-    [
-      "esp32s3:8",
-      "servo_actuator:PWM",
-      "magenta",
-      []
-    ],
-    [
-      "servo_actuator:V+",
-      "esp32s3:5V",
-      "red",
-      []
-    ],
-    [
-      "servo_actuator:GND",
-      "esp32s3:GND.9",
-      "black",
       []
     ]
-  ],
-  "dependencies": {}
+  ]
 }

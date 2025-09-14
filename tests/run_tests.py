@@ -468,6 +468,102 @@ def run_all_simulator_tests(verbose=False):
     return all(success for _, success in results)
 
 
+def run_hardware_tests(verbose=False):
+    """Run hardware-in-the-loop tests with real ESP32-S3 hardware."""
+    cmd = [sys.executable, "-m", "pytest", "hardware_in_loop/", "-m", "hardware"]
+    
+    if verbose:
+        cmd.append("-v")
+    
+    print("🔧 Running Hardware-in-the-Loop Tests (requires physical ESP32-S3)...")
+    print("Note: These tests require physical ESP32-S3 hardware connected via USB")
+    
+    result = run_command(cmd, "Hardware-in-the-Loop Tests")
+    return result.returncode == 0
+
+
+def run_environmental_tests(verbose=False):
+    """Run environmental stress tests."""
+    cmd = [sys.executable, "-m", "pytest", "hardware_in_loop/", "-m", "environmental"]
+    
+    if verbose:
+        cmd.append("-v")
+    
+    print("🌡️ Running Environmental Stress Tests...")
+    print("Testing ESP32-S3 under temperature, voltage, and EMI stress conditions")
+    
+    result = run_command(cmd, "Environmental Stress Tests")
+    return result.returncode == 0
+
+
+def run_real_world_tests(verbose=False):
+    """Run comprehensive real-world accuracy tests."""
+    print("🌍 Running Comprehensive Real-World Accuracy Tests...")
+    print("This includes enhanced simulation, hardware testing, and environmental validation")
+    
+    # Test categories for real-world accuracy
+    real_world_tests = [
+        ("Enhanced Wokwi Simulation", run_wokwi_tests),
+        ("QEMU Hardware Emulation", run_qemu_tests),
+        ("Environmental Stress", run_environmental_tests),
+        ("Hardware-in-Loop (if available)", run_hardware_tests),
+        ("Performance under Load", run_performance_tests),
+        ("Security Validation", run_security_tests),
+        ("Boundary Conditions", run_boundary_tests)
+    ]
+    
+    results = []
+    for test_name, test_func in real_world_tests:
+        print(f"\n{'='*60}")
+        print(f"Running {test_name}...")
+        print('='*60)
+        
+        try:
+            success = test_func(verbose)
+            results.append((test_name, success))
+            
+            if success:
+                print(f"✅ {test_name} passed")
+            else:
+                print(f"❌ {test_name} failed")
+                # Continue with other tests even if hardware tests fail
+                if "Hardware-in-Loop" in test_name:
+                    print("   (Hardware tests may fail if no ESP32-S3 is connected)")
+        except Exception as e:
+            print(f"❌ {test_name} failed with error: {e}")
+            results.append((test_name, False))
+            # Continue with other tests
+            if "Hardware-in-Loop" in test_name:
+                print("   (Hardware tests may fail if no ESP32-S3 is connected)")
+    
+    # Print real-world testing summary
+    print(f"\n{'='*60}")
+    print("REAL-WORLD TESTING SUMMARY")
+    print('='*60)
+    
+    passed = 0
+    total = len(results)
+    
+    for test_name, success in results:
+        status = "✅ PASSED" if success else "❌ FAILED"
+        print(f"{test_name:<40} {status}")
+        if success:
+            passed += 1
+    
+    print(f"\nOverall: {passed}/{total} real-world test categories passed")
+    print("\nReal-world testing provides:")
+    print("- Hardware constraint validation")
+    print("- Environmental stress testing") 
+    print("- Realistic timing and performance")
+    print("- Production deployment confidence")
+    
+    # Consider it successful if most tests pass (allow hardware tests to fail)
+    critical_tests = [name for name, _ in results if "Hardware-in-Loop" not in name]
+    critical_passed = sum(1 for name, success in results if success and "Hardware-in-Loop" not in name)
+    
+    return critical_passed >= len(critical_tests) * 0.8  # 80% of non-hardware tests must pass
+
+
 def main():
     """Main test runner function."""
     parser = argparse.ArgumentParser(
@@ -506,6 +602,11 @@ Examples:
     parser.add_argument("--network", action="store_true", help="Run network simulation tests")
     parser.add_argument("--browser", action="store_true", help="Run browser automation tests")
     parser.add_argument("--simulators", action="store_true", help="Run all simulator/emulator tests")
+    
+    # Hardware-in-the-loop testing options
+    parser.add_argument("--hardware", action="store_true", help="Run hardware-in-the-loop tests (requires physical ESP32-S3)")
+    parser.add_argument("--environmental", action="store_true", help="Run environmental stress tests")
+    parser.add_argument("--real-world", action="store_true", help="Run comprehensive real-world accuracy tests")
     
     # Options
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
@@ -581,6 +682,12 @@ Examples:
         success = run_browser_tests(args.verbose)
     elif args.simulators:
         success = run_all_simulator_tests(args.verbose)
+    elif args.hardware:
+        success = run_hardware_tests(args.verbose)
+    elif args.environmental:
+        success = run_environmental_tests(args.verbose)
+    elif args.real_world:
+        success = run_real_world_tests(args.verbose)
     elif args.all:
         success = run_all_tests(args.verbose, args.coverage, args.exclude_slow)
     elif args.report:

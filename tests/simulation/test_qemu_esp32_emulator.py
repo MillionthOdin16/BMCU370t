@@ -77,7 +77,45 @@ class TestQEMUESP32Emulation:
         assert "Application startup" in boot_log
         assert "BMCU370 Interface initialized" in boot_log
         
-        # Check memory layout
+    @pytest.mark.simulation
+    @pytest.mark.qemu
+    def test_qemu_esp32s3_cpu_emulation(self):
+        """Test ESP32-S3 dual-core CPU emulation in QEMU."""
+        emulator = self.create_qemu_emulator()
+        
+        # Start CPU emulation
+        cpu_result = emulator.start_cpu_emulation()
+        assert cpu_result == True
+        
+        # Test dual-core configuration
+        cpu_config = emulator.get_cpu_configuration()
+        assert cpu_config["core_count"] == 2
+        assert cpu_config["architecture"] == "Xtensa LX7"
+        assert cpu_config["base_frequency"] == 240000000  # 240MHz
+        
+        # Test core 0 functionality
+        core0_test = emulator.test_cpu_core(0)
+        assert core0_test["operational"] == True
+        assert core0_test["instruction_cache"] == True
+        assert core0_test["data_cache"] == True
+        
+        # Test core 1 functionality  
+        core1_test = emulator.test_cpu_core(1)
+        assert core1_test["operational"] == True
+        assert core1_test["instruction_cache"] == True
+        assert core1_test["data_cache"] == True
+        
+        # Test inter-core communication
+        icc_test = emulator.test_inter_core_communication()
+        assert icc_test["shared_memory_access"] == True
+        assert icc_test["synchronization_primitives"] == True
+        assert icc_test["cross_core_interrupts"] == True
+        
+        # Test realistic CPU performance characteristics
+        perf_test = emulator.test_cpu_performance()
+        assert perf_test["instruction_throughput"] >= 300000000  # 300 MIPS min
+        assert perf_test["context_switch_time"] <= 5.0  # Max 5μs
+        assert perf_test["interrupt_latency"] <= 3.0    # Max 3μs
         memory_map = emulator.get_memory_map()
         assert memory_map["flash_start"] == 0x42000000
         assert memory_map["flash_size"] == 4 * 1024 * 1024
