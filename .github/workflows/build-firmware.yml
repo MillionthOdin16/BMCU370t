@@ -1,4 +1,4 @@
-name: Build Firmware
+name: Build and Quality Analysis
 
 on:
   pull_request:
@@ -7,14 +7,16 @@ on:
       - 'esp32_firmware/**'
       - 'platformio.ini'
       - 'lib/**'
-      - '.github/workflows/build-firmware.yml'
+      - 'tests/**'
+      - '.github/workflows/**'
   push:
     paths:
       - 'src/**'
       - 'esp32_firmware/**'
       - 'platformio.ini'
       - 'lib/**'
-      - '.github/workflows/build-firmware.yml'
+      - 'tests/**'
+      - '.github/workflows/**'
   workflow_dispatch:  # Allow manual triggering
 
 # Limit concurrent runs to avoid overloading the self-hosted runner
@@ -23,9 +25,81 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  code-quality:
+    runs-on: ubuntu-latest
+    name: Code Quality Analysis
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: Install static analysis tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cppcheck clang-format clang-tidy
+        python -m pip install --upgrade pip
+        pip install cpplint lizard
+        
+    - name: Run cppcheck on BMCU370 source
+      run: |
+        echo "## BMCU370 (CH32V203) Static Analysis" > static_analysis_report.md
+        echo "" >> static_analysis_report.md
+        
+        echo "### Cppcheck Results" >> static_analysis_report.md
+        echo '```' >> static_analysis_report.md
+        cppcheck --enable=all --inconclusive --std=c++17 \
+          --suppress=missingIncludeSystem \
+          --suppress=unusedFunction \
+          --suppress=unmatchedSuppression \
+          --force src/ 2>&1 | tee -a static_analysis_report.md || true
+        echo '```' >> static_analysis_report.md
+        echo "" >> static_analysis_report.md
+        
+    - name: Run cppcheck on ESP32 source  
+      run: |
+        echo "### ESP32 Cppcheck Results" >> static_analysis_report.md
+        echo '```' >> static_analysis_report.md
+        cppcheck --enable=all --inconclusive --std=c++17 \
+          --suppress=missingIncludeSystem \
+          --suppress=unusedFunction \
+          --suppress=unmatchedSuppression \
+          --force esp32_firmware/src/ 2>&1 | tee -a static_analysis_report.md || true
+        echo '```' >> static_analysis_report.md
+        echo "" >> static_analysis_report.md
+        
+    - name: Check code complexity with lizard
+      run: |
+        echo "### Code Complexity Analysis (Lizard)" >> static_analysis_report.md
+        echo '```' >> static_analysis_report.md
+        lizard src/ esp32_firmware/src/ --length 50 --CCN 15 2>&1 | tee -a static_analysis_report.md || true
+        echo '```' >> static_analysis_report.md
+        echo "" >> static_analysis_report.md
+        
+    - name: Check code style with cpplint
+      run: |
+        echo "### Code Style Check (cpplint)" >> static_analysis_report.md
+        echo '```' >> static_analysis_report.md
+        find src/ esp32_firmware/src/ -name "*.cpp" -o -name "*.h" | \
+          xargs cpplint --filter=-legal/copyright,-build/include_subdir,-readability/todo 2>&1 | \
+          tee -a static_analysis_report.md || true
+        echo '```' >> static_analysis_report.md
+        
+    - name: Upload static analysis report
+      uses: actions/upload-artifact@v4
+      with:
+        name: static-analysis-report-${{ github.sha }}
+        path: static_analysis_report.md
+        retention-days: 30
+        
   build-bmcu370:
     runs-on: ubuntu-latest
     name: Build BMCU370 Firmware
+    needs: code-quality
     
     steps:
     - name: Checkout code
@@ -90,6 +164,7 @@ jobs:
   build-esp32:
     runs-on: ubuntu-latest
     name: Build ESP32 Firmware
+    needs: code-quality
     
     steps:
     - name: Checkout code
