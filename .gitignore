@@ -43,3 +43,36 @@ firmware-artifacts/
 __pycache__/
 *.pyc
 *.pyo
+
+# CI/CD artifacts and test outputs
+test/results/
+test/firmware/
+*-report.json
+*.xml
+simulation/firmware/
+simulation/logs/
+hil/firmware/
+hil/results/
+hil/logs/
+validation/firmware/
+validation/results/
+release-staging/
+release-package/
+pipeline-results/
+reports/
+
+# Security scan outputs
+bandit-report.json
+safety-report.json
+semgrep-report.json
+
+# Static analysis outputs
+*-cppcheck.xml
+*-complexity.xml
+
+# Memory analysis
+memory-usage.txt
+
+# Temporary test files
+temp_strings.txt
+verify.bin

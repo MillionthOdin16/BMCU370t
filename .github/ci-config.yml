@@ -1,0 +1,93 @@
+# CI Pipeline Configuration
+# This file defines configuration parameters for the multi-stage firmware CI pipeline
+
+# Build configuration
+BUILD_TIMEOUT_MINUTES: 30
+STATIC_ANALYSIS_TIMEOUT_MINUTES: 20
+TEST_TIMEOUT_MINUTES: 25
+HIL_TIMEOUT_MINUTES: 45
+
+# Artifact retention
+ARTIFACT_RETENTION_DAYS: 30
+RELEASE_ARTIFACT_RETENTION_DAYS: 90
+
+# Security scanning
+ENABLE_SECURITY_SCANNING: true
+SECURITY_SCAN_TOOLS:
+  - bandit
+  - safety
+  - semgrep
+  - cppcheck
+
+# Static analysis tools
+STATIC_ANALYSIS_TOOLS:
+  - cppcheck
+  - clang-tidy
+  - lizard
+  - cpplint
+
+# Testing configuration
+UNIT_TEST_FRAMEWORK: pytest
+PROTOCOL_TEST_ENABLED: true
+SIMULATION_TEST_ENABLED: true
+HIL_TEST_ENABLED: false  # Only enabled manually or for main branch
+
+# Build targets
+TARGETS:
+  bmcu370:
+    platform: CH32V203
+    environment: genericCH32V203C8T6
+    framework: arduino
+    max_flash_size: 65536  # 64KB
+    max_ram_size: 20480    # 20KB
+    features:
+      - USB_CDC
+      - DFU_MODE
+      - BAMBUBUS_PROTOCOL
+    
+  esp32:
+    platform: ESP32-S3
+    environment: esp32s3
+    framework: arduino
+    max_flash_size: 4194304  # 4MB
+    max_ram_size: 327680     # 320KB
+    features:
+      - USB_HOST
+      - WEB_SERVER
+      - WIFI_MANAGER
+      - OTA_UPDATES
+      - LITTLEFS
+      - HISTORICAL_DATA
+
+# Quality gates
+QUALITY_GATES:
+  static_analysis_required: true
+  unit_tests_required: true
+  security_scan_required: true
+  firmware_validation_required: true
+  memory_usage_check: true
+  
+  # Failure thresholds
+  max_static_analysis_warnings: 50
+  max_complexity_score: 15
+  min_test_coverage: 70
+
+# Environment variables
+ENVIRONMENT_VARIABLES:
+  PLATFORMIO_CORE_DIR: ~/.platformio
+  PYTHONPATH: ${{ github.workspace }}
+  
+# Cache configuration
+CACHE_PATHS:
+  - ~/.cache/pip
+  - ~/.platformio
+  - ~/.local/share/cppcheck
+  - .pio
+
+# Notification settings
+NOTIFICATIONS:
+  on_failure: true
+  on_success: false
+  channels:
+    - github_status
+    - artifacts
