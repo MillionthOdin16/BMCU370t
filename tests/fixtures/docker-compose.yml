@@ -1,0 +1,139 @@
+version: '3.8'
+
+services:
+  esp32-idf:
+    image: espressif/idf:latest
+    container_name: bmcu370-esp32-idf
+    working_dir: /workspace
+    volumes:
+      - ../esp32_firmware:/workspace/firmware:ro
+      - ./docker_output:/workspace/output
+      - /dev:/dev:ro
+    environment:
+      - IDF_PATH=/opt/esp/idf
+      - IDF_TOOLS_PATH=/opt/esp
+      - PATH=/opt/esp/python_env/idf5.1_py3.8_env/bin:/opt/esp/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      - IDF_TARGET=esp32s3
+    command: |
+      bash -c "
+        echo 'ESP32-S3 Development Environment Ready'
+        echo 'ESP-IDF Version:' && idf.py --version
+        echo 'Toolchain:' && xtensa-esp32s3-elf-gcc --version | head -1
+        echo 'Python:' && python --version
+        echo 'Available commands:'
+        echo '  idf.py build          - Build firmware'
+        echo '  idf.py size           - Analyze memory usage'
+        echo '  idf.py menuconfig     - Configure project'
+        echo '  esptool.py version    - Flash tool version'
+        tail -f /dev/null
+      "
+    networks:
+      - esp32-test
+
+  esp32-platformio:
+    image: platformio/platformio-core:latest
+    container_name: bmcu370-esp32-pio
+    working_dir: /workspace
+    volumes:
+      - ../esp32_firmware:/workspace/firmware:ro
+      - ./docker_output:/workspace/output
+    environment:
+      - PLATFORMIO_CORE_DIR=/workspace/.platformio
+    command: |
+      bash -c "
+        echo 'PlatformIO Development Environment Ready'
+        echo 'PlatformIO Version:' && pio --version
+        echo 'Available platforms:' && pio platform list
+        echo 'Available commands:'
+        echo '  pio run               - Build firmware'
+        echo '  pio run -t upload     - Upload firmware'
+        echo '  pio run -t monitor    - Serial monitor'
+        echo '  pio lib search        - Search libraries'
+        tail -f /dev/null
+      "
+    networks:
+      - esp32-test
+
+  esp32-testing:
+    image: ubuntu:22.04
+    container_name: bmcu370-esp32-testing
+    working_dir: /workspace
+    volumes:
+      - ../:/workspace/project:ro
+      - ./docker_output:/workspace/output
+    environment:
+      - DEBIAN_FRONTEND=noninteractive
+      - PYTHONPATH=/workspace/project
+    command: |
+      bash -c "
+        apt-get update &&
+        apt-get install -y python3 python3-pip python3-venv git curl wget &&
+        python3 -m pip install --upgrade pip &&
+        echo 'ESP32 Testing Environment Ready' &&
+        echo 'Python Version:' && python3 --version &&
+        echo 'Available tools:' &&
+        echo '  python3 -m pytest    - Run tests' &&
+        echo '  cppcheck             - Static analysis' &&
+        echo '  clang-tidy           - Code analysis' &&
+        tail -f /dev/null
+      "
+    networks:
+      - esp32-test
+
+  # Network simulation container
+  mininet-sim:
+    image: iwaseyusuke/mininet:latest
+    container_name: bmcu370-network-sim
+    privileged: true
+    volumes:
+      - ./network_configs:/workspace/configs
+      - ./docker_output:/workspace/output
+    command: |
+      bash -c "
+        echo 'Mininet Network Simulation Ready'
+        echo 'Mininet Version:' && mn --version
+        echo 'Available commands:'
+        echo '  mn --topo single,3    - Create simple topology'
+        echo '  mn --test pingall     - Test connectivity'
+        echo '  mn --custom topo.py   - Custom topology'
+        tail -f /dev/null
+      "
+    networks:
+      - esp32-test
+
+  # Web testing container with browsers
+  web-testing:
+    image: selenium/standalone-chrome:latest
+    container_name: bmcu370-web-testing
+    volumes:
+      - ./docker_output:/workspace/output
+      - /dev/shm:/dev/shm
+    environment:
+      - SE_VNC_NO_PASSWORD=1
+      - SE_SCREEN_WIDTH=1920
+      - SE_SCREEN_HEIGHT=1080
+    ports:
+      - "4444:4444"
+      - "7900:7900"  # VNC port for debugging
+    command: |
+      bash -c "
+        echo 'Web Testing Environment Ready'
+        echo 'Selenium Hub: http://localhost:4444'
+        echo 'VNC Access: http://localhost:7900 (password: secret)'
+        /opt/bin/entry_point.sh
+      "
+    networks:
+      - esp32-test
+
+networks:
+  esp32-test:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  esp32-build:
+    driver: local
+  platformio-cache:
+    driver: local

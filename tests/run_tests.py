@@ -235,6 +235,123 @@ def validate_esp32_config():
         return True  # Don't fail if script doesn't exist
 
 
+def run_wokwi_tests(verbose=False):
+    """Run Wokwi ESP32 simulator tests."""
+    cmd = [sys.executable, "-m", "pytest", "simulation/", "-m", "wokwi"]
+    
+    if verbose:
+        cmd.append("-v")
+    
+    result = run_command(cmd, "Wokwi ESP32 Simulator Tests")
+    return result.returncode == 0
+
+
+def run_qemu_tests(verbose=False):
+    """Run QEMU ESP32 emulation tests."""
+    cmd = [sys.executable, "-m", "pytest", "simulation/", "-m", "qemu"]
+    
+    if verbose:
+        cmd.append("-v")
+    
+    result = run_command(cmd, "QEMU ESP32 Emulation Tests")
+    return result.returncode == 0
+
+
+def run_docker_tests(verbose=False):
+    """Run Docker ESP32 environment tests."""
+    cmd = [sys.executable, "-m", "pytest", "simulation/", "-m", "docker"]
+    
+    if verbose:
+        cmd.append("-v")
+    
+    result = run_command(cmd, "Docker ESP32 Environment Tests")
+    return result.returncode == 0
+
+
+def run_gpio_tests(verbose=False):
+    """Run GPIO and peripheral simulation tests."""
+    cmd = [sys.executable, "-m", "pytest", "simulation/", "-m", "gpio"]
+    
+    if verbose:
+        cmd.append("-v")
+    
+    result = run_command(cmd, "GPIO and Peripheral Simulation Tests")
+    return result.returncode == 0
+
+
+def run_network_tests(verbose=False):
+    """Run network simulation tests."""
+    cmd = [sys.executable, "-m", "pytest", "simulation/", "-m", "network"]
+    
+    if verbose:
+        cmd.append("-v")
+    
+    result = run_command(cmd, "Network Simulation Tests")
+    return result.returncode == 0
+
+
+def run_browser_tests(verbose=False):
+    """Run browser automation tests."""
+    cmd = [sys.executable, "-m", "pytest", "simulation/", "-m", "browser"]
+    
+    if verbose:
+        cmd.append("-v")
+    
+    result = run_command(cmd, "Browser Automation Tests")
+    return result.returncode == 0
+
+
+def run_all_simulator_tests(verbose=False):
+    """Run all simulator and emulator tests."""
+    print("Running all simulator and emulator tests...")
+    
+    # Test categories to run
+    simulator_tests = [
+        ("Wokwi ESP32 Simulator", run_wokwi_tests),
+        ("QEMU ESP32 Emulation", run_qemu_tests),
+        ("Docker ESP32 Environment", run_docker_tests),
+        ("GPIO and Peripheral Simulation", run_gpio_tests),
+        ("Network Simulation", run_network_tests),
+        ("Browser Automation", run_browser_tests)
+    ]
+    
+    results = []
+    for test_name, test_func in simulator_tests:
+        print(f"\n{'='*60}")
+        print(f"Running {test_name} Tests...")
+        print('='*60)
+        
+        try:
+            success = test_func(verbose)
+            results.append((test_name, success))
+            
+            if success:
+                print(f"✅ {test_name} tests passed")
+            else:
+                print(f"❌ {test_name} tests failed")
+        except Exception as e:
+            print(f"❌ {test_name} tests failed with error: {e}")
+            results.append((test_name, False))
+    
+    # Print summary
+    print(f"\n{'='*60}")
+    print("SIMULATOR TEST SUMMARY")
+    print('='*60)
+    
+    passed = 0
+    total = len(results)
+    
+    for test_name, success in results:
+        status = "✅ PASSED" if success else "❌ FAILED"
+        print(f"{test_name:<35} {status}")
+        if success:
+            passed += 1
+    
+    print(f"\nOverall: {passed}/{total} simulator test categories passed")
+    
+    return all(success for _, success in results)
+
+
 def main():
     """Main test runner function."""
     parser = argparse.ArgumentParser(
@@ -264,6 +381,15 @@ Examples:
     parser.add_argument("--error-handling", action="store_true", help="Run error handling tests")
     parser.add_argument("--boundary", action="store_true", help="Run boundary condition tests")
     parser.add_argument("--specific", type=str, help="Run specific test file or function")
+    
+    # Enhanced simulation categories
+    parser.add_argument("--wokwi", action="store_true", help="Run Wokwi ESP32 simulator tests")
+    parser.add_argument("--qemu", action="store_true", help="Run QEMU ESP32 emulation tests")
+    parser.add_argument("--docker", action="store_true", help="Run Docker ESP32 environment tests")
+    parser.add_argument("--gpio", action="store_true", help="Run GPIO and peripheral simulation tests")
+    parser.add_argument("--network", action="store_true", help="Run network simulation tests")
+    parser.add_argument("--browser", action="store_true", help="Run browser automation tests")
+    parser.add_argument("--simulators", action="store_true", help="Run all simulator/emulator tests")
     
     # Options
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
@@ -319,6 +445,20 @@ Examples:
         success = run_error_handling_tests(args.verbose)
     elif args.boundary:
         success = run_boundary_tests(args.verbose)
+    elif args.wokwi:
+        success = run_wokwi_tests(args.verbose)
+    elif args.qemu:
+        success = run_qemu_tests(args.verbose)
+    elif args.docker:
+        success = run_docker_tests(args.verbose)
+    elif args.gpio:
+        success = run_gpio_tests(args.verbose)
+    elif args.network:
+        success = run_network_tests(args.verbose)
+    elif args.browser:
+        success = run_browser_tests(args.verbose)
+    elif args.simulators:
+        success = run_all_simulator_tests(args.verbose)
     elif args.all:
         success = run_all_tests(args.verbose, args.coverage, args.exclude_slow)
     elif args.report:

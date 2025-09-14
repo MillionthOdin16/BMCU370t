@@ -17,3 +17,17 @@ mock>=5.1.0
 parameterized>=0.9.0
 pyfakefs>=5.3.0
 responses>=0.24.0
+
+# Free emulators and simulators
+docker>=6.1.0                    # Docker Python client for containerized testing
+webdriver-manager>=4.0.0         # Automatic WebDriver management for browser testing
+mininet>=2.3.0                   # Network simulation (if available)
+pyserial>=3.5                    # Serial communication simulation
+psutil>=5.9.0                    # System resource monitoring
+numpy>=1.24.0                    # Numerical computations for signal simulation
+matplotlib>=3.7.0                # Plotting for test result visualization
+
+# Optional tools for enhanced simulation (install separately if available)
+# qemu                            # QEMU emulator for ESP32 hardware simulation
+# platformio                     # PlatformIO for ESP32 firmware testing
+# esptool                         # ESP32 flash tools
