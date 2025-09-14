@@ -1,0 +1,139 @@
+{
+  "system_online": {
+    "system": {
+      "uptime": 123456789,
+      "version": "00.00.06.49",
+      "bambubus_status": "online",
+      "device_type": "AMS",
+      "error_count": 0,
+      "free_heap": 45678,
+      "wifi_rssi": -45
+    },
+    "channels": [
+      {
+        "id": 0,
+        "filament": {
+          "status": "online",
+          "name": "PLA Basic White",
+          "color": {"r": 255, "g": 255, "b": 255, "a": 255},
+          "temperature": {"min": 190, "max": 220},
+          "meters_remaining": 125.5
+        },
+        "motion": {
+          "state": "idle",
+          "position": 1024,
+          "speed": 0.0,
+          "pressure": 1650
+        },
+        "rgb": {
+          "brightness": 15,
+          "current_color": {"r": 0, "g": 255, "b": 0}
+        },
+        "sensors": {
+          "hall_position": 1024,
+          "filament_present": true
+        },
+        "errors": []
+      },
+      {
+        "id": 1,
+        "filament": {
+          "status": "online",
+          "name": "PETG Clear",
+          "color": {"r": 128, "g": 255, "b": 128, "a": 128},
+          "temperature": {"min": 230, "max": 250},
+          "meters_remaining": 87.2
+        },
+        "motion": {
+          "state": "feeding",
+          "position": 2048,
+          "speed": 1.5,
+          "pressure": 1800
+        },
+        "rgb": {
+          "brightness": 15,
+          "current_color": {"r": 0, "g": 0, "b": 255}
+        },
+        "sensors": {
+          "hall_position": 2048,
+          "filament_present": true
+        },
+        "errors": []
+      }
+    ],
+    "config": {
+      "led_brightness": {"main": 35, "channels": 15},
+      "voltage_thresholds": {"high": 1.85, "low": 1.45},
+      "motion_params": {"send_time": 1200, "filter_k": 100}
+    }
+  },
+  "system_offline": {
+    "system": {
+      "uptime": 0,
+      "version": "unknown",
+      "bambubus_status": "offline",
+      "device_type": "unknown",
+      "error_count": 5,
+      "free_heap": 65536,
+      "wifi_rssi": 0
+    },
+    "channels": [],
+    "config": {
+      "led_brightness": {"main": 0, "channels": 0},
+      "voltage_thresholds": {"high": 1.85, "low": 1.45},
+      "motion_params": {"send_time": 1200, "filter_k": 100}
+    }
+  },
+  "system_error": {
+    "system": {
+      "uptime": 87654321,
+      "version": "00.00.06.49",
+      "bambubus_status": "error",
+      "device_type": "AMS",
+      "error_count": 3,
+      "free_heap": 12345,
+      "wifi_rssi": -78
+    },
+    "channels": [
+      {
+        "id": 0,
+        "filament": {
+          "status": "error",
+          "name": "Unknown",
+          "color": {"r": 255, "g": 0, "b": 0, "a": 255},
+          "temperature": {"min": 0, "max": 0},
+          "meters_remaining": 0
+        },
+        "motion": {
+          "state": "error",
+          "position": 0,
+          "speed": 0.0,
+          "pressure": 0
+        },
+        "rgb": {
+          "brightness": 15,
+          "current_color": {"r": 255, "g": 0, "b": 0}
+        },
+        "sensors": {
+          "hall_position": 0,
+          "filament_present": false
+        },
+        "errors": ["SENSOR_ERROR", "COMMUNICATION_TIMEOUT"]
+      }
+    ],
+    "config": {
+      "led_brightness": {"main": 35, "channels": 15},
+      "voltage_thresholds": {"high": 1.85, "low": 1.45},
+      "motion_params": {"send_time": 1200, "filter_k": 100}
+    }
+  },
+  "usb_commands": {
+    "GET_STATUS": "{\"system\":{\"uptime\":123456,\"version\":\"00.00.06.49\"},\"channels\":[]}",
+    "GET_CONFIG": "{\"led_brightness\":{\"main\":35,\"channels\":15}}",
+    "SET_PARAM led_brightness.main=50": "OK",
+    "GET_VERSION": "BMCU370 v00.00.06.49",
+    "RESET": "RESET_OK",
+    "DFU": "DFU_MODE_ACTIVE",
+    "INVALID_COMMAND": "ERROR: Unknown command"
+  }
+}

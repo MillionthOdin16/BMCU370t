@@ -43,3 +43,14 @@ firmware-artifacts/
 __pycache__/
 *.pyc
 *.pyo
+
+# Test cache and temporary files
+tests/.test_cache.json
+tests/.pytest_cache/
+tests/simulation/wokwi_cache/
+tests/performance-results/
+tests/emulator-reports/
+tests/htmlcov/
+tests/test-results.xml
+tests/test-report.html
+tests/*-report.html

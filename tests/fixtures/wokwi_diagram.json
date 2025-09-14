@@ -1,0 +1,136 @@
+{
+  "board": "esp32-s3-devkitc-1",
+  "firmware": "esp32_firmware",
+  "parts": [
+    {
+      "type": "board-esp32-s3-devkitc-1",
+      "id": "esp32s3"
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led1",
+      "attrs": {
+        "color": "red"
+      }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led2",
+      "attrs": {
+        "color": "green"
+      }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r1",
+      "attrs": {
+        "value": "220"
+      }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r2",
+      "attrs": {
+        "value": "220"
+      }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "btn1"
+    },
+    {
+      "type": "wokwi-dht22",
+      "id": "dht1"
+    },
+    {
+      "type": "wokwi-potentiometer",
+      "id": "pot1"
+    }
+  ],
+  "connections": [
+    [
+      "esp32s3:2",
+      "led1:A",
+      "green",
+      []
+    ],
+    [
+      "esp32s3:4",
+      "led2:A",
+      "blue",
+      []
+    ],
+    [
+      "esp32s3:18",
+      "btn1:1.l",
+      "red",
+      []
+    ],
+    [
+      "esp32s3:19",
+      "dht1:SDA",
+      "yellow",
+      []
+    ],
+    [
+      "esp32s3:21",
+      "pot1:SIG",
+      "orange",
+      []
+    ],
+    [
+      "led1:C",
+      "r1:1",
+      "green",
+      []
+    ],
+    [
+      "led2:C",
+      "r2:1",
+      "blue",
+      []
+    ],
+    [
+      "r1:2",
+      "esp32s3:GND.1",
+      "black",
+      []
+    ],
+    [
+      "r2:2",
+      "esp32s3:GND.2",
+      "black",
+      []
+    ],
+    [
+      "btn1:2.r",
+      "esp32s3:GND.3",
+      "black",
+      []
+    ],
+    [
+      "dht1:GND",
+      "esp32s3:GND.4",
+      "black",
+      []
+    ],
+    [
+      "dht1:VCC",
+      "esp32s3:3V3",
+      "red",
+      []
+    ],
+    [
+      "pot1:GND",
+      "esp32s3:GND.5",
+      "black",
+      []
+    ],
+    [
+      "pot1:VCC",
+      "esp32s3:3V3",
+      "red",
+      []
+    ]
+  ]
+}
