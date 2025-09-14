@@ -17,6 +17,11 @@ on:
       - '.github/workflows/build-firmware.yml'
   workflow_dispatch:  # Allow manual triggering
 
+# Limit concurrent runs to avoid overloading the self-hosted runner
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-bmcu370:
     runs-on: ubuntu-latest
