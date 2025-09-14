@@ -49,6 +49,153 @@ class TestBMCU370Simulator:
         assert device['manufacturer'] == 'BMCU Technologies'
         
     @pytest.mark.simulation
+    def test_comprehensive_hardware_failure_scenarios(self):
+        """Test comprehensive hardware failure simulation scenarios."""
+        simulator = self.create_bmcu370_simulator()
+        
+        # Complex failure scenarios with cascading effects
+        failure_scenarios = [
+            {
+                'name': 'power_brownout_cascade',
+                'sequence': [
+                    ('POWER_FLUCTUATION', 0.1),
+                    ('VOLTAGE_DROP', 0.2),
+                    ('USB_COMMUNICATION_UNSTABLE', 0.3),
+                    ('SENSOR_DEGRADED_ACCURACY', 0.5)
+                ],
+                'expected_recovery_time': 5.0
+            },
+            {
+                'name': 'thermal_overload_sequence',
+                'sequence': [
+                    ('TEMPERATURE_RISING', 1.0),
+                    ('THERMAL_WARNING', 2.0),
+                    ('THERMAL_PROTECTION_ACTIVE', 3.0),
+                    ('SENSOR_SHUTDOWN', 4.0)
+                ],
+                'expected_recovery_time': 30.0
+            },
+            {
+                'name': 'communication_storm_recovery',
+                'sequence': [
+                    ('USB_BUFFER_OVERFLOW', 0.1),
+                    ('PROTOCOL_CORRUPTION', 0.2),
+                    ('COMMAND_QUEUE_FULL', 0.3),
+                    ('COMMUNICATION_RESET', 1.0)
+                ],
+                'expected_recovery_time': 3.0
+            }
+        ]
+        
+        for scenario in failure_scenarios:
+            simulator.reset_to_normal_operation()
+            
+            # Inject failures in sequence
+            for error, delay in scenario['sequence']:
+                simulator.inject_hardware_error(error)
+                time.sleep(delay)
+                
+                # Verify system state at each step
+                status = simulator.get_detailed_status()
+                assert error in status['active_errors']
+                assert status['system_degraded'] == True
+                
+            # Test system recovery
+            start_recovery = time.time()
+            simulator.initiate_recovery_sequence()
+            
+            # Monitor recovery progress
+            recovery_complete = False
+            while time.time() - start_recovery < scenario['expected_recovery_time'] * 2:
+                status = simulator.get_detailed_status()
+                if not status['active_errors'] and not status['system_degraded']:
+                    recovery_complete = True
+                    break
+                time.sleep(0.1)
+                
+            assert recovery_complete, f"Recovery not completed for scenario: {scenario['name']}"
+            
+    @pytest.mark.simulation
+    def test_environmental_stress_simulation(self):
+        """Test environmental stress condition simulation."""
+        simulator = self.create_bmcu370_simulator()
+        
+        stress_conditions = [
+            {
+                'name': 'arctic_operation',
+                'temperature': -40,
+                'humidity': 85,
+                'vibration': {'frequency': 0, 'amplitude': 0},
+                'expected_effects': ['COLD_START_DELAY', 'CONDENSATION_RISK', 'BATTERY_DEGRADED']
+            },
+            {
+                'name': 'desert_operation',
+                'temperature': 85,
+                'humidity': 5,
+                'vibration': {'frequency': 0, 'amplitude': 0},
+                'expected_effects': ['THERMAL_THROTTLING', 'COMPONENT_EXPANSION', 'CALIBRATION_DRIFT']
+            },
+            {
+                'name': 'industrial_vibration',
+                'temperature': 25,
+                'humidity': 50,
+                'vibration': {'frequency': 50, 'amplitude': 2},
+                'expected_effects': ['MECHANICAL_STRESS', 'CONNECTION_INTERMITTENT', 'SENSOR_NOISE']
+            },
+            {
+                'name': 'high_humidity_corrosive',
+                'temperature': 60,
+                'humidity': 95,
+                'vibration': {'frequency': 0, 'amplitude': 0},
+                'expected_effects': ['CORROSION_DETECTED', 'ELECTRICAL_LEAKAGE', 'INSULATION_DEGRADED']
+            }
+        ]
+        
+        for condition in stress_conditions:
+            # Apply environmental stress
+            simulator.apply_environmental_conditions(condition)
+            
+            # Monitor system behavior over stress period
+            stress_duration = 5.0  # 5 seconds of stress testing
+            start_time = time.time()
+            
+            observed_effects = []
+            while time.time() - start_time < stress_duration:
+                status = simulator.get_environmental_status()
+                sensor_data = simulator.get_sensor_data_with_environmental_effects()
+                
+                # Check for expected environmental effects
+                for effect in condition['expected_effects']:
+                    if effect in status.get('environmental_warnings', []):
+                        if effect not in observed_effects:
+                            observed_effects.append(effect)
+                            
+                # Verify sensor data shows environmental impact
+                if condition['name'] == 'arctic_operation':
+                    assert sensor_data['temperature'] <= condition['temperature'] + 10
+                    assert sensor_data.get('startup_time', 0) > 1.0  # Delayed startup
+                    
+                elif condition['name'] == 'desert_operation':
+                    assert sensor_data['temperature'] >= condition['temperature'] - 10
+                    assert sensor_data.get('thermal_throttling', False) == True
+                    
+                elif condition['name'] == 'industrial_vibration':
+                    assert sensor_data.get('vibration_detected', False) == True
+                    assert sensor_data.get('sensor_noise_level', 0) > 0.1
+                    
+                time.sleep(0.1)
+                
+            # Verify at least some expected effects were observed
+            assert len(observed_effects) >= len(condition['expected_effects']) // 2
+            
+            # Clear environmental stress and verify recovery
+            simulator.clear_environmental_conditions()
+            time.sleep(1.0)  # Recovery time
+            
+            status = simulator.get_environmental_status()
+            assert len(status.get('environmental_warnings', [])) == 0
+        
+    @pytest.mark.simulation
     def test_command_response_simulation(self):
         """Test command response simulation."""
         simulator = self.create_bmcu370_simulator()

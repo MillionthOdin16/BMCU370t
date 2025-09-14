@@ -126,6 +126,45 @@ def run_performance_tests(verbose=False):
     return result.returncode == 0
 
 
+def run_security_tests(verbose=False):
+    """Run security tests."""
+    cmd = [sys.executable, "-m", "pytest", "tests/security/"]
+    
+    if verbose:
+        cmd.append("-v")
+    
+    cmd.extend(["-m", "security"])
+    
+    result = run_command(cmd, "Security Tests")
+    return result.returncode == 0
+
+
+def run_error_handling_tests(verbose=False):
+    """Run error handling tests."""
+    cmd = [sys.executable, "-m", "pytest", "tests/error_handling/"]
+    
+    if verbose:
+        cmd.append("-v")
+    
+    cmd.extend(["-m", "error_handling"])
+    
+    result = run_command(cmd, "Error Handling Tests")
+    return result.returncode == 0
+
+
+def run_boundary_tests(verbose=False):
+    """Run boundary condition tests."""
+    cmd = [sys.executable, "-m", "pytest", "tests/boundary/"]
+    
+    if verbose:
+        cmd.append("-v")
+    
+    cmd.extend(["-m", "boundary"])
+    
+    result = run_command(cmd, "Boundary Tests")
+    return result.returncode == 0
+
+
 def run_all_tests(verbose=False, coverage=False, exclude_slow=False):
     """Run all test categories."""
     cmd = [sys.executable, "-m", "pytest", "tests/"]
@@ -221,6 +260,9 @@ Examples:
     parser.add_argument("--web", action="store_true", help="Run web interface tests")
     parser.add_argument("--simulation", action="store_true", help="Run simulation tests")
     parser.add_argument("--performance", action="store_true", help="Run performance tests")
+    parser.add_argument("--security", action="store_true", help="Run security tests")
+    parser.add_argument("--error-handling", action="store_true", help="Run error handling tests")
+    parser.add_argument("--boundary", action="store_true", help="Run boundary condition tests")
     parser.add_argument("--specific", type=str, help="Run specific test file or function")
     
     # Options
@@ -271,6 +313,12 @@ Examples:
         success = run_simulation_tests(args.verbose)
     elif args.performance:
         success = run_performance_tests(args.verbose)
+    elif args.security:
+        success = run_security_tests(args.verbose)
+    elif getattr(args, 'error_handling', False):
+        success = run_error_handling_tests(args.verbose)
+    elif args.boundary:
+        success = run_boundary_tests(args.verbose)
     elif args.all:
         success = run_all_tests(args.verbose, args.coverage, args.exclude_slow)
     elif args.report:

@@ -21,7 +21,13 @@ jobs:
     strategy:
       matrix:
         python-version: ['3.9', '3.10', '3.11']
-        test-category: ['unit', 'integration', 'web', 'simulation']
+        test-category: ['unit', 'integration', 'web', 'simulation', 'security', 'error-handling', 'boundary']
+        exclude:
+          # Run performance tests only on Python 3.11 to reduce CI load
+          - python-version: '3.9'
+            test-category: 'boundary'
+          - python-version: '3.10'
+            test-category: 'boundary'
         
     steps:
     - name: Checkout repository

@@ -9,6 +9,7 @@ import pytest
 import time
 import threading
 import queue
+import statistics
 from unittest.mock import Mock, patch
 from tests.conftest import load_test_data, assert_memory_usage_acceptable
 
@@ -48,6 +49,454 @@ class TestWebServerPerformance:
                 
                 if response.status_code != 200:
                     errors.put(f"HTTP {response.status_code}")
+                    
+            except Exception as e:
+                errors.put(str(e))
+                
+        # Start concurrent clients
+        threads = []
+        for i in range(max_clients):
+            t = threading.Thread(target=simulate_client)
+            threads.append(t)
+            t.start()
+            
+        # Wait for all clients to complete
+        for t in threads:
+            t.join(timeout=10.0)
+            
+        # Collect results
+        times = []
+        while not response_times.empty():
+            times.append(response_times.get())
+            
+        error_list = []
+        while not errors.empty():
+            error_list.append(errors.get())
+            
+        # Verify performance metrics
+        assert len(times) >= max_clients * 0.8  # At least 80% should complete
+        assert len(error_list) < max_clients * 0.2  # Less than 20% errors
+        
+        if times:
+            avg_response_time = sum(times) / len(times)
+            max_response_time = max(times)
+            
+            # Response times should be reasonable
+            assert avg_response_time < 1.0  # Average < 1 second
+            assert max_response_time < 5.0  # Maximum < 5 seconds
+            
+    @pytest.mark.performance
+    def test_websocket_message_throughput(self):
+        """Test WebSocket message throughput under load."""
+        websocket_server = self.create_mock_websocket_server()
+        
+        message_count = 1000
+        sent_messages = 0
+        received_messages = 0
+        errors = 0
+        
+        start_time = time.time()
+        
+        # Send rapid messages
+        for i in range(message_count):
+            try:
+                message = {'type': 'sensor_data', 'data': {'temp': 25.0 + i * 0.1}}
+                result = websocket_server.send_message(message)
+                if result:
+                    sent_messages += 1
+                else:
+                    errors += 1
+                    
+                # Simulate processing time
+                time.sleep(0.001)  # 1ms between messages
+                
+            except Exception:
+                errors += 1
+                
+        end_time = time.time()
+        duration = end_time - start_time
+        
+        # Verify throughput metrics
+        throughput = sent_messages / duration  # messages per second
+        error_rate = errors / message_count
+        
+        assert throughput >= 500  # At least 500 messages/second
+        assert error_rate < 0.05  # Less than 5% error rate
+        assert sent_messages >= message_count * 0.95  # At least 95% sent
+        
+    @pytest.mark.performance
+    def test_memory_usage_under_load(self):
+        """Test memory usage patterns under sustained load."""
+        web_server = self.create_mock_web_server()
+        
+        initial_memory = web_server.get_memory_usage()
+        memory_samples = [initial_memory]
+        
+        # Sustained load test
+        load_duration = 10.0  # 10 seconds
+        requests_per_second = 50
+        
+        start_time = time.time()
+        request_count = 0
+        
+        while time.time() - start_time < load_duration:
+            # Make multiple rapid requests
+            for _ in range(requests_per_second):
+                web_server.handle_api_request('/api/status')
+                web_server.handle_api_request('/api/config')
+                request_count += 1
+                
+            # Sample memory usage
+            current_memory = web_server.get_memory_usage()
+            memory_samples.append(current_memory)
+            
+            time.sleep(1.0)  # 1 second intervals
+            
+        final_memory = web_server.get_memory_usage()
+        
+        # Analyze memory usage patterns
+        memory_growth = final_memory - initial_memory
+        memory_growth_percent = (memory_growth / initial_memory) * 100
+        
+        max_memory = max(memory_samples)
+        memory_variance = statistics.variance(memory_samples[-5:])  # Variance in last 5 samples
+        
+        # Memory should not grow excessively
+        assert memory_growth_percent < 50, f"Excessive memory growth: {memory_growth_percent:.2f}%"
+        
+        # Memory usage should stabilize (low variance at end)
+        assert memory_variance < (initial_memory * 0.1) ** 2, "Memory usage not stabilized"
+        
+        # Maximum memory should be reasonable
+        assert max_memory < initial_memory * 2, "Memory usage peaked too high"
+        
+        print(f"Processed {request_count} requests, memory growth: {memory_growth_percent:.2f}%")
+        
+    @pytest.mark.performance
+    def test_api_response_time_distribution(self):
+        """Test API response time distribution and consistency."""
+        web_server = self.create_mock_web_server()
+        
+        api_endpoints = [
+            '/api/status',
+            '/api/config',
+            '/api/logs',
+            '/api/wifi/status',
+            '/api/historical/summary'
+        ]
+        
+        response_times = {endpoint: [] for endpoint in api_endpoints}
+        
+        # Collect response time samples
+        samples_per_endpoint = 100
+        
+        for endpoint in api_endpoints:
+            for _ in range(samples_per_endpoint):
+                start_time = time.time()
+                web_server.handle_api_request(endpoint)
+                end_time = time.time()
+                
+                response_time = (end_time - start_time) * 1000  # Convert to milliseconds
+                response_times[endpoint].append(response_time)
+                
+                # Small delay between requests
+                time.sleep(0.01)
+                
+        # Analyze response time statistics
+        for endpoint, times in response_times.items():
+            avg_time = statistics.mean(times)
+            median_time = statistics.median(times)
+            p95_time = sorted(times)[int(len(times) * 0.95)]
+            p99_time = sorted(times)[int(len(times) * 0.99)]
+            std_dev = statistics.stdev(times)
+            
+            # Performance requirements
+            assert avg_time < 100, f"{endpoint}: Average response time {avg_time:.2f}ms too high"
+            assert median_time < 50, f"{endpoint}: Median response time {median_time:.2f}ms too high"
+            assert p95_time < 200, f"{endpoint}: 95th percentile {p95_time:.2f}ms too high"
+            assert p99_time < 500, f"{endpoint}: 99th percentile {p99_time:.2f}ms too high"
+            assert std_dev < 50, f"{endpoint}: Response time variance {std_dev:.2f}ms too high"
+            
+            print(f"{endpoint}: avg={avg_time:.1f}ms, p95={p95_time:.1f}ms, p99={p99_time:.1f}ms")
+            
+    @pytest.mark.performance
+    def test_database_query_performance(self):
+        """Test historical data database query performance."""
+        history_manager = self.create_mock_history_manager()
+        
+        # Pre-populate with test data
+        data_points = 10000
+        for i in range(data_points):
+            timestamp = time.time() - (data_points - i) * 60  # 1 minute intervals
+            data = {
+                'timestamp': timestamp,
+                'temperature': 25.0 + (i % 100) * 0.1,
+                'voltage': 4.8 + (i % 50) * 0.001,
+                'current': 0.15 + (i % 20) * 0.001
+            }
+            history_manager.store_data_point(data)
+            
+        # Test various query patterns
+        query_tests = [
+            {
+                'name': 'recent_data',
+                'query': lambda: history_manager.get_recent_data(hours=1),
+                'max_time_ms': 100
+            },
+            {
+                'name': 'daily_summary',
+                'query': lambda: history_manager.get_daily_summary(days=7),
+                'max_time_ms': 200
+            },
+            {
+                'name': 'trend_analysis',
+                'query': lambda: history_manager.get_trend_analysis(hours=24),
+                'max_time_ms': 500
+            },
+            {
+                'name': 'statistical_summary',
+                'query': lambda: history_manager.get_statistical_summary(days=30),
+                'max_time_ms': 1000
+            }
+        ]
+        
+        for test in query_tests:
+            # Run query multiple times to get average
+            query_times = []
+            for _ in range(10):
+                start_time = time.time()
+                result = test['query']()
+                end_time = time.time()
+                
+                query_time = (end_time - start_time) * 1000  # Convert to milliseconds
+                query_times.append(query_time)
+                
+                # Verify query returned data
+                assert result is not None
+                assert len(result) > 0
+                
+            avg_query_time = statistics.mean(query_times)
+            max_query_time = max(query_times)
+            
+            # Performance requirements
+            assert avg_query_time < test['max_time_ms'], \
+                f"{test['name']}: Average query time {avg_query_time:.2f}ms exceeds {test['max_time_ms']}ms"
+            assert max_query_time < test['max_time_ms'] * 2, \
+                f"{test['name']}: Maximum query time {max_query_time:.2f}ms too high"
+                
+            print(f"{test['name']}: avg={avg_query_time:.1f}ms, max={max_query_time:.1f}ms")
+            
+    @pytest.mark.performance
+    def test_stress_test_recovery(self):
+        """Test system recovery after stress conditions."""
+        web_server = self.create_mock_web_server()
+        
+        # Phase 1: Normal operation baseline
+        baseline_response_times = []
+        for _ in range(50):
+            start_time = time.time()
+            web_server.handle_api_request('/api/status')
+            end_time = time.time()
+            baseline_response_times.append((end_time - start_time) * 1000)
+            time.sleep(0.02)
+            
+        baseline_avg = statistics.mean(baseline_response_times)
+        
+        # Phase 2: Stress test
+        stress_duration = 5.0  # 5 seconds of stress
+        stress_start = time.time()
+        stress_requests = 0
+        
+        while time.time() - stress_start < stress_duration:
+            # Rapid fire requests
+            for _ in range(20):
+                web_server.handle_api_request('/api/status')
+                stress_requests += 1
+                
+        # Phase 3: Recovery period
+        recovery_start = time.time()
+        recovery_response_times = []
+        
+        while time.time() - recovery_start < 10.0:  # 10 seconds recovery
+            start_time = time.time()
+            web_server.handle_api_request('/api/status')
+            end_time = time.time()
+            recovery_response_times.append((end_time - start_time) * 1000)
+            time.sleep(0.1)
+            
+        # Analyze recovery
+        recovery_samples = 10  # Last 10 samples
+        final_response_times = recovery_response_times[-recovery_samples:]
+        final_avg = statistics.mean(final_response_times)
+        
+        # System should recover to near baseline performance
+        performance_degradation = (final_avg - baseline_avg) / baseline_avg * 100
+        
+        assert performance_degradation < 50, \
+            f"Performance degradation {performance_degradation:.1f}% after stress test too high"
+        
+        assert stress_requests > 500, f"Stress test too light: {stress_requests} requests"
+        
+        print(f"Baseline: {baseline_avg:.1f}ms, Post-stress: {final_avg:.1f}ms, " +
+              f"Degradation: {performance_degradation:.1f}%")
+              
+    @pytest.mark.performance  
+    def test_resource_exhaustion_handling(self):
+        """Test handling of resource exhaustion scenarios."""
+        web_server = self.create_mock_web_server()
+        
+        # Test file descriptor exhaustion
+        file_handles = []
+        max_files = 100  # Simulate limited file descriptors
+        
+        try:
+            for i in range(max_files + 10):
+                handle = web_server.open_file_handle(f"test_file_{i}")
+                if handle:
+                    file_handles.append(handle)
+                else:
+                    # Should gracefully handle exhaustion
+                    break
+                    
+        except Exception as e:
+            # Should not crash, but handle gracefully
+            assert "resource" in str(e).lower() or "limit" in str(e).lower()
+            
+        # Verify system still responsive
+        response = web_server.handle_api_request('/api/status')
+        assert response.status_code == 200
+        
+        # Cleanup
+        for handle in file_handles:
+            web_server.close_file_handle(handle)
+            
+        # Test memory exhaustion simulation
+        large_allocations = []
+        allocation_size = 1024 * 1024  # 1MB allocations
+        
+        for i in range(50):  # Try to allocate 50MB
+            try:
+                allocation = web_server.allocate_memory(allocation_size)
+                if allocation:
+                    large_allocations.append(allocation)
+                else:
+                    # Should gracefully handle memory pressure
+                    break
+            except MemoryError:
+                # Expected when memory is exhausted
+                break
+                
+        # System should still be responsive
+        response = web_server.handle_api_request('/api/status')
+        assert response.status_code == 200
+        
+        # Cleanup
+        for allocation in large_allocations:
+            web_server.free_memory(allocation)
+
+    def create_mock_web_server(self):
+        """Create a mock web server for performance testing."""
+        server = Mock()
+        server._memory_usage = 50000  # Initial memory usage
+        server._file_handles = []
+        server._memory_allocations = []
+        
+        def handle_api_request_mock(endpoint):
+            # Simulate realistic processing time
+            if endpoint == '/api/historical/summary':
+                time.sleep(0.01)  # 10ms for complex queries
+            else:
+                time.sleep(0.002)  # 2ms for simple requests
+                
+            # Simulate memory usage
+            server._memory_usage += 100  # Small memory increase per request
+            
+            return Mock(status_code=200)
+            
+        def get_memory_usage_mock():
+            return server._memory_usage
+            
+        def open_file_handle_mock(filename):
+            if len(server._file_handles) >= 100:  # Simulate limit
+                return None
+            handle = Mock()
+            server._file_handles.append(handle)
+            return handle
+            
+        def close_file_handle_mock(handle):
+            if handle in server._file_handles:
+                server._file_handles.remove(handle)
+                
+        def allocate_memory_mock(size):
+            if len(server._memory_allocations) >= 30:  # Simulate limit
+                return None
+            allocation = Mock()
+            server._memory_allocations.append(allocation)
+            server._memory_usage += size
+            return allocation
+            
+        def free_memory_mock(allocation):
+            if allocation in server._memory_allocations:
+                server._memory_allocations.remove(allocation)
+                server._memory_usage -= 1024 * 1024  # 1MB
+                
+        server.handle_api_request.side_effect = handle_api_request_mock
+        server.get_memory_usage.side_effect = get_memory_usage_mock
+        server.open_file_handle.side_effect = open_file_handle_mock
+        server.close_file_handle.side_effect = close_file_handle_mock
+        server.allocate_memory.side_effect = allocate_memory_mock
+        server.free_memory.side_effect = free_memory_mock
+        
+        return server
+        
+    def create_mock_websocket_server(self):
+        """Create a mock WebSocket server for testing."""
+        server = Mock()
+        
+        def send_message_mock(message):
+            # Simulate message processing
+            time.sleep(0.001)  # 1ms processing time
+            return True  # Success
+            
+        server.send_message.side_effect = send_message_mock
+        return server
+        
+    def create_mock_history_manager(self):
+        """Create a mock historical data manager."""
+        manager = Mock()
+        manager._data_points = []
+        
+        def store_data_point_mock(data):
+            manager._data_points.append(data)
+            
+        def get_recent_data_mock(hours=1):
+            # Simulate database query time
+            time.sleep(0.05)  # 50ms
+            cutoff = time.time() - hours * 3600
+            return [dp for dp in manager._data_points if dp['timestamp'] > cutoff]
+            
+        def get_daily_summary_mock(days=7):
+            time.sleep(0.1)  # 100ms
+            return [{'day': i, 'avg_temp': 25.0, 'avg_voltage': 4.8} for i in range(days)]
+            
+        def get_trend_analysis_mock(hours=24):
+            time.sleep(0.2)  # 200ms
+            return {'trend': 'stable', 'slope': 0.1, 'correlation': 0.95}
+            
+        def get_statistical_summary_mock(days=30):
+            time.sleep(0.5)  # 500ms
+            return {
+                'mean': 25.0, 'std': 2.5, 'min': 20.0, 'max': 30.0,
+                'percentiles': {'p25': 23.0, 'p50': 25.0, 'p75': 27.0}
+            }
+            
+        manager.store_data_point.side_effect = store_data_point_mock
+        manager.get_recent_data.side_effect = get_recent_data_mock
+        manager.get_daily_summary.side_effect = get_daily_summary_mock
+        manager.get_trend_analysis.side_effect = get_trend_analysis_mock
+        manager.get_statistical_summary.side_effect = get_statistical_summary_mock
+        
+        return manager
                     
             except Exception as e:
                 errors.put(str(e))
