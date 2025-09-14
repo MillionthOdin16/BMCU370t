@@ -496,10 +496,153 @@ def run_environmental_tests(verbose=False):
     return result.returncode == 0
 
 
+def run_user_interaction_tests(verbose=False):
+    """Run real user interaction tests using Playwright."""
+    cmd = [sys.executable, "-m", "pytest", "user_interaction/", "-m", "user_interaction"]
+    
+    if verbose:
+        cmd.append("-v")
+    
+    print("👤 Running Real User Interaction Tests (Playwright)...")
+    print("Testing ESP32 interface as real users would interact with it")
+    
+    result = run_command(cmd, "Real User Interaction Tests")
+    return result.returncode == 0
+
+
+def run_mobile_user_tests(verbose=False):
+    """Run mobile user interaction tests."""
+    cmd = [sys.executable, "-m", "pytest", "user_interaction/", "-m", "mobile"]
+    
+    if verbose:
+        cmd.append("-v")
+    
+    print("📱 Running Mobile User Interaction Tests...")
+    print("Testing mobile user experience on phones and tablets")
+    
+    result = run_command(cmd, "Mobile User Interaction Tests")
+    return result.returncode == 0
+
+
+def run_accessibility_tests(verbose=False):
+    """Run accessibility user experience tests."""
+    cmd = [sys.executable, "-m", "pytest", "user_interaction/", "-m", "accessibility"]
+    
+    if verbose:
+        cmd.append("-v")
+    
+    print("♿ Running Accessibility User Experience Tests...")
+    print("Testing for users with disabilities and assistive technologies")
+    
+    result = run_command(cmd, "Accessibility User Experience Tests")
+    return result.returncode == 0
+
+
+def run_visual_regression_tests(verbose=False):
+    """Run visual regression tests."""
+    cmd = [sys.executable, "-m", "pytest", "user_interaction/", "-m", "visual_regression"]
+    
+    if verbose:
+        cmd.append("-v")
+    
+    print("👁️ Running Visual Regression Tests...")
+    print("Detecting visual changes that might impact user experience")
+    
+    result = run_command(cmd, "Visual Regression Tests")
+    return result.returncode == 0
+
+
+def run_network_failure_tests(verbose=False):
+    """Run network failure and recovery tests."""
+    cmd = [sys.executable, "-m", "pytest", "user_interaction/", "-m", "network_failure"]
+    
+    if verbose:
+        cmd.append("-v")
+    
+    print("🌐 Running Network Failure Recovery Tests...")
+    print("Testing user experience during network issues and recovery")
+    
+    result = run_command(cmd, "Network Failure Recovery Tests")
+    return result.returncode == 0
+
+
+def run_user_performance_tests(verbose=False):
+    """Run user-focused performance tests."""
+    cmd = [sys.executable, "-m", "pytest", "user_interaction/", "-m", "performance"]
+    
+    if verbose:
+        cmd.append("-v")
+    
+    print("⚡ Running User Performance Experience Tests...")
+    print("Testing performance from user's perspective (load times, responsiveness)")
+    
+    result = run_command(cmd, "User Performance Experience Tests")
+    return result.returncode == 0
+
+
+def run_all_user_interaction_tests(verbose=False):
+    """Run all user interaction tests."""
+    print("👥 Running All User Interaction Tests...")
+    print("Comprehensive testing of user experience with Playwright")
+    
+    # Test categories to run
+    user_tests = [
+        ("Real User Interactions", run_user_interaction_tests),
+        ("Mobile User Experience", run_mobile_user_tests),
+        ("Accessibility Testing", run_accessibility_tests),
+        ("Visual Regression", run_visual_regression_tests),
+        ("Network Failure Recovery", run_network_failure_tests),
+        ("User Performance Experience", run_user_performance_tests)
+    ]
+    
+    results = []
+    for test_name, test_func in user_tests:
+        print(f"\n{'='*60}")
+        print(f"Running {test_name}...")
+        print('='*60)
+        
+        try:
+            success = test_func(verbose)
+            results.append((test_name, success))
+            
+            if success:
+                print(f"✅ {test_name} passed")
+            else:
+                print(f"❌ {test_name} failed")
+        except Exception as e:
+            print(f"❌ {test_name} failed with error: {e}")
+            results.append((test_name, False))
+    
+    # Print summary
+    print(f"\n{'='*60}")
+    print("USER INTERACTION TEST SUMMARY")
+    print('='*60)
+    
+    passed = 0
+    total = len(results)
+    
+    for test_name, success in results:
+        status = "✅ PASSED" if success else "❌ FAILED"
+        print(f"{test_name:<35} {status}")
+        if success:
+            passed += 1
+    
+    print(f"\nOverall: {passed}/{total} user interaction test categories passed")
+    print("\nUser interaction tests provide:")
+    print("- Real user behavior simulation")
+    print("- Accessibility compliance validation")
+    print("- Mobile experience testing")
+    print("- Visual consistency checking")
+    print("- Network resilience validation")
+    print("- Performance from user perspective")
+    
+    return all(success for _, success in results)
+
+
 def run_real_world_tests(verbose=False):
     """Run comprehensive real-world accuracy tests."""
     print("🌍 Running Comprehensive Real-World Accuracy Tests...")
-    print("This includes enhanced simulation, hardware testing, and environmental validation")
+    print("This includes enhanced simulation, hardware testing, environmental validation, and user experience")
     
     # Test categories for real-world accuracy
     real_world_tests = [
@@ -509,7 +652,8 @@ def run_real_world_tests(verbose=False):
         ("Hardware-in-Loop (if available)", run_hardware_tests),
         ("Performance under Load", run_performance_tests),
         ("Security Validation", run_security_tests),
-        ("Boundary Conditions", run_boundary_tests)
+        ("Boundary Conditions", run_boundary_tests),
+        ("User Interaction Experience", run_all_user_interaction_tests)
     ]
     
     results = []
@@ -579,6 +723,15 @@ Examples:
   python run_tests.py --simulation             # Run simulation tests
   python run_tests.py --specific tests/unit/test_bmcu370_interface.py
   python run_tests.py --report                 # Generate comprehensive report
+  
+  # New User Interaction Tests:
+  python run_tests.py --user-interaction       # Run real user interaction tests with Playwright
+  python run_tests.py --mobile                 # Run mobile user experience tests
+  python run_tests.py --accessibility          # Run accessibility tests for users with disabilities
+  python run_tests.py --visual-regression      # Run visual regression tests
+  python run_tests.py --network-failure        # Run network failure recovery tests
+  python run_tests.py --user-performance       # Run user-focused performance tests
+  python run_tests.py --all-user-tests         # Run all user interaction tests
         """
     )
     
@@ -607,6 +760,15 @@ Examples:
     parser.add_argument("--hardware", action="store_true", help="Run hardware-in-the-loop tests (requires physical ESP32-S3)")
     parser.add_argument("--environmental", action="store_true", help="Run environmental stress tests")
     parser.add_argument("--real-world", action="store_true", help="Run comprehensive real-world accuracy tests")
+    
+    # User interaction testing options (NEW)
+    parser.add_argument("--user-interaction", action="store_true", help="Run real user interaction tests (Playwright)")
+    parser.add_argument("--mobile", action="store_true", help="Run mobile user experience tests")
+    parser.add_argument("--accessibility", action="store_true", help="Run accessibility user experience tests")
+    parser.add_argument("--visual-regression", action="store_true", help="Run visual regression tests")
+    parser.add_argument("--network-failure", action="store_true", help="Run network failure recovery tests")
+    parser.add_argument("--user-performance", action="store_true", help="Run user-focused performance tests")
+    parser.add_argument("--all-user-tests", action="store_true", help="Run all user interaction tests")
     
     # Options
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
@@ -688,6 +850,20 @@ Examples:
         success = run_environmental_tests(args.verbose)
     elif args.real_world:
         success = run_real_world_tests(args.verbose)
+    elif getattr(args, 'user_interaction', False):
+        success = run_user_interaction_tests(args.verbose)
+    elif args.mobile:
+        success = run_mobile_user_tests(args.verbose)
+    elif args.accessibility:
+        success = run_accessibility_tests(args.verbose)
+    elif getattr(args, 'visual_regression', False):
+        success = run_visual_regression_tests(args.verbose)
+    elif getattr(args, 'network_failure', False):
+        success = run_network_failure_tests(args.verbose)
+    elif getattr(args, 'user_performance', False):
+        success = run_user_performance_tests(args.verbose)
+    elif getattr(args, 'all_user_tests', False):
+        success = run_all_user_interaction_tests(args.verbose)
     elif args.all:
         success = run_all_tests(args.verbose, args.coverage, args.exclude_slow)
     elif args.report:
