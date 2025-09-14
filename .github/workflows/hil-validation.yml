@@ -1,0 +1,325 @@
+name: Hardware-in-the-Loop (HIL) Testing
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_suite:
+        description: 'Test suite to run'
+        required: true
+        default: 'full'
+        type: choice
+        options:
+          - full
+          - smoke
+          - communication
+          - hardware_control
+      flash_firmware:
+        description: 'Flash new firmware before testing'
+        required: true
+        default: true
+        type: boolean
+  schedule:
+    # Run HIL tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+# HIL tests run on self-hosted runner with physical hardware
+jobs:
+  hil-hardware-setup:
+    runs-on: self-hosted
+    name: HIL Hardware Setup and Validation
+    if: ${{ contains(github.repository_owner, 'MillionthOdin16') }}
+    
+    outputs:
+      hardware_ready: ${{ steps.hardware_check.outputs.hardware_ready }}
+      esp32_port: ${{ steps.hardware_check.outputs.esp32_port }}
+      bmcu370_port: ${{ steps.hardware_check.outputs.bmcu370_port }}
+      
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Hardware connectivity check
+      id: hardware_check
+      run: |
+        echo "Checking hardware connectivity..."
+        
+        # Check for required tools
+        command -v esptool.py >/dev/null 2>&1 || { echo "esptool.py not found"; exit 1; }
+        command -v dfu-util >/dev/null 2>&1 || { echo "dfu-util not found"; exit 1; }
+        
+        # Detect ESP32 device
+        ESP32_PORT=""
+        for port in /dev/ttyUSB* /dev/ttyACM*; do
+          if [ -e "$port" ]; then
+            if esptool.py --port "$port" chip_id 2>/dev/null | grep -q "ESP32-S3"; then
+              ESP32_PORT="$port"
+              break
+            fi
+          fi
+        done
+        
+        if [ -z "$ESP32_PORT" ]; then
+          echo "ESP32-S3 device not found"
+          echo "hardware_ready=false" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+        
+        echo "ESP32-S3 found on port: $ESP32_PORT"
+        echo "esp32_port=$ESP32_PORT" >> $GITHUB_OUTPUT
+        
+        # Check for BMCU370 (will be in DFU mode if present)
+        BMCU370_AVAILABLE=false
+        if dfu-util -l 2>/dev/null | grep -q "28e9:0189"; then
+          echo "BMCU370 found in DFU mode"
+          BMCU370_AVAILABLE=true
+        elif lsusb | grep -q "28e9:0189"; then
+          echo "BMCU370 found (not in DFU mode)"
+          BMCU370_AVAILABLE=true
+        fi
+        
+        if [ "$BMCU370_AVAILABLE" = "true" ]; then
+          echo "bmcu370_port=dfu" >> $GITHUB_OUTPUT
+        else
+          echo "BMCU370 device not found (continuing with ESP32-only tests)"
+          echo "bmcu370_port=none" >> $GITHUB_OUTPUT
+        fi
+        
+        echo "hardware_ready=true" >> $GITHUB_OUTPUT
+        
+    - name: Setup Python environment
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: Install HIL test dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r tests/config/requirements.txt
+        
+        # Install additional HIL-specific tools
+        pip install pyusb esptool dfu-util
+        
+  hil-firmware-flash:
+    runs-on: self-hosted
+    name: Flash Firmware for HIL Testing
+    needs: hil-hardware-setup
+    if: ${{ needs.hil-hardware-setup.outputs.hardware_ready == 'true' && github.event.inputs.flash_firmware == 'true' }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Cache PlatformIO
+      uses: actions/cache@v4
+      with:
+        path: ~/.platformio
+        key: ${{ runner.os }}-platformio-hil-${{ hashFiles('**/platformio.ini') }}
+        
+    - name: Install PlatformIO
+      run: |
+        python -m pip install --upgrade pip
+        pip install --upgrade platformio
+        
+    - name: Build firmware for HIL testing
+      run: |
+        # Build BMCU370 firmware
+        pio run --environment genericCH32V203C8T6
+        
+        # Build ESP32 firmware
+        cd esp32_firmware
+        pio run --environment esp32s3
+        pio run --target buildfs --environment esp32s3
+        
+    - name: Flash BMCU370 firmware
+      if: ${{ needs.hil-hardware-setup.outputs.bmcu370_port != 'none' }}
+      run: |
+        echo "Flashing BMCU370 firmware..."
+        
+        # Enter DFU mode (device should already be in DFU mode or can be triggered)
+        # Flash the firmware
+        dfu-util -a 0 -D .pio/build/genericCH32V203C8T6/firmware.bin
+        
+        echo "BMCU370 firmware flashed successfully"
+        
+    - name: Flash ESP32 firmware
+      run: |
+        ESP32_PORT="${{ needs.hil-hardware-setup.outputs.esp32_port }}"
+        echo "Flashing ESP32 firmware on port: $ESP32_PORT"
+        
+        cd esp32_firmware
+        
+        # Flash bootloader, partitions, firmware, and filesystem
+        esptool.py --chip esp32s3 --port "$ESP32_PORT" --baud 921600 \
+          write_flash --flash_size 4MB --flash_mode dio --flash_freq 80m \
+          0x0000 .pio/build/esp32s3/bootloader.bin \
+          0x8000 .pio/build/esp32s3/partitions.bin \
+          0x10000 .pio/build/esp32s3/firmware.bin \
+          0x310000 .pio/build/esp32s3/littlefs.bin
+          
+        echo "ESP32 firmware flashed successfully"
+        
+    - name: Wait for system initialization
+      run: |
+        echo "Waiting for system initialization..."
+        sleep 10
+        
+  hil-communication-tests:
+    runs-on: self-hosted
+    name: HIL Communication Tests
+    needs: [hil-hardware-setup, hil-firmware-flash]
+    if: ${{ always() && needs.hil-hardware-setup.outputs.hardware_ready == 'true' }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install test dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r tests/config/requirements.txt
+        
+    - name: Run USB communication tests
+      if: ${{ needs.hil-hardware-setup.outputs.bmcu370_port != 'none' }}
+      run: |
+        cd tests/hil
+        python -m pytest test_live_communication.py::TestUSBCommunication -v \
+          --tb=short --html=usb_communication_report.html --self-contained-html
+          
+    - name: Run ESP32 web interface tests
+      run: |
+        cd tests/hil
+        python -m pytest test_live_communication.py::TestWebInterface -v \
+          --tb=short --html=web_interface_hil_report.html --self-contained-html
+          
+    - name: Upload communication test results
+      uses: actions/upload-artifact@v4
+      with:
+        name: hil-communication-test-results-${{ github.sha }}
+        path: tests/hil/*_report.html
+        retention-days: 30
+        
+  hil-hardware-control-tests:
+    runs-on: self-hosted
+    name: HIL Hardware Control Tests
+    needs: [hil-hardware-setup, hil-firmware-flash]
+    if: ${{ always() && needs.hil-hardware-setup.outputs.hardware_ready == 'true' && (github.event.inputs.test_suite == 'full' || github.event.inputs.test_suite == 'hardware_control') }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install test dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r tests/config/requirements.txt
+        
+    - name: Run hardware control tests
+      run: |
+        cd tests/hil
+        python -m pytest test_system_validation.py::TestHardwareControl -v \
+          --tb=short --html=hardware_control_report.html --self-contained-html
+          
+    - name: Upload hardware control test results
+      uses: actions/upload-artifact@v4
+      with:
+        name: hil-hardware-control-results-${{ github.sha }}
+        path: tests/hil/hardware_control_report.html
+        retention-days: 30
+        
+  hil-system-validation:
+    runs-on: self-hosted
+    name: HIL System Validation
+    needs: [hil-hardware-setup, hil-firmware-flash, hil-communication-tests]
+    if: ${{ always() && needs.hil-hardware-setup.outputs.hardware_ready == 'true' && github.event.inputs.test_suite == 'full' }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install test dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r tests/config/requirements.txt
+        
+    - name: Run full system validation
+      run: |
+        cd tests/hil
+        python -m pytest test_system_validation.py -v \
+          --tb=short --html=system_validation_report.html --self-contained-html \
+          --maxfail=5  # Stop after 5 failures to avoid hardware damage
+          
+    - name: Collect system logs
+      if: always()
+      run: |
+        cd tests/hil
+        mkdir -p system_logs
+        
+        # Collect any system logs, serial outputs, etc.
+        if [ -f /var/log/messages ]; then
+          tail -n 100 /var/log/messages > system_logs/system_messages.log
+        fi
+        
+        # Save test environment info
+        uname -a > system_logs/system_info.txt
+        lsusb > system_logs/usb_devices.txt
+        ls -la /dev/tty* > system_logs/serial_devices.txt
+        
+    - name: Upload system validation results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: hil-system-validation-results-${{ github.sha }}
+        path: |
+          tests/hil/system_validation_report.html
+          tests/hil/system_logs/
+        retention-days: 60
+        
+  hil-results-summary:
+    runs-on: self-hosted
+    name: HIL Results Summary
+    needs: [hil-hardware-setup, hil-communication-tests, hil-hardware-control-tests, hil-system-validation]
+    if: always()
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Generate HIL test summary
+      run: |
+        mkdir -p hil-summary
+        
+        echo "# Hardware-in-the-Loop Test Results" > hil-summary/HIL_TEST_SUMMARY.md
+        echo "" >> hil-summary/HIL_TEST_SUMMARY.md
+        echo "## Test Execution Details" >> hil-summary/HIL_TEST_SUMMARY.md
+        echo "- **Timestamp**: $(date)" >> hil-summary/HIL_TEST_SUMMARY.md
+        echo "- **Commit**: ${{ github.sha }}" >> hil-summary/HIL_TEST_SUMMARY.md
+        echo "- **Branch**: ${{ github.ref_name }}" >> hil-summary/HIL_TEST_SUMMARY.md
+        echo "- **Test Suite**: ${{ github.event.inputs.test_suite || 'scheduled' }}" >> hil-summary/HIL_TEST_SUMMARY.md
+        echo "- **Firmware Flashed**: ${{ github.event.inputs.flash_firmware || 'true' }}" >> hil-summary/HIL_TEST_SUMMARY.md
+        echo "" >> hil-summary/HIL_TEST_SUMMARY.md
+        
+        echo "## Hardware Status" >> hil-summary/HIL_TEST_SUMMARY.md
+        echo "- **Hardware Ready**: ${{ needs.hil-hardware-setup.outputs.hardware_ready }}" >> hil-summary/HIL_TEST_SUMMARY.md
+        echo "- **ESP32 Port**: ${{ needs.hil-hardware-setup.outputs.esp32_port }}" >> hil-summary/HIL_TEST_SUMMARY.md
+        echo "- **BMCU370 Port**: ${{ needs.hil-hardware-setup.outputs.bmcu370_port }}" >> hil-summary/HIL_TEST_SUMMARY.md
+        echo "" >> hil-summary/HIL_TEST_SUMMARY.md
+        
+        echo "## Test Results" >> hil-summary/HIL_TEST_SUMMARY.md
+        echo "- **Communication Tests**: ${{ needs.hil-communication-tests.result }}" >> hil-summary/HIL_TEST_SUMMARY.md
+        echo "- **Hardware Control Tests**: ${{ needs.hil-hardware-control-tests.result }}" >> hil-summary/HIL_TEST_SUMMARY.md
+        echo "- **System Validation**: ${{ needs.hil-system-validation.result }}" >> hil-summary/HIL_TEST_SUMMARY.md
+        echo "" >> hil-summary/HIL_TEST_SUMMARY.md
+        
+        echo "## Test Coverage" >> hil-summary/HIL_TEST_SUMMARY.md
+        echo "- **Real Hardware Communication**: ESP32 ↔ BMCU370 USB CDC" >> hil-summary/HIL_TEST_SUMMARY.md
+        echo "- **Web Interface**: Live HTTP server testing" >> hil-summary/HIL_TEST_SUMMARY.md
+        echo "- **Hardware Control**: LED, motor, sensor validation" >> hil-summary/HIL_TEST_SUMMARY.md
+        echo "- **System Integration**: End-to-end workflow testing" >> hil-summary/HIL_TEST_SUMMARY.md
+        echo "- **Error Recovery**: Disconnect/reconnect scenarios" >> hil-summary/HIL_TEST_SUMMARY.md
+        
+    - name: Upload HIL summary report
+      uses: actions/upload-artifact@v4
+      with:
+        name: hil-test-summary-${{ github.sha }}
+        path: hil-summary/
+        retention-days: 90

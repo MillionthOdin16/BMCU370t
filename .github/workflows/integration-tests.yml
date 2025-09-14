@@ -1,0 +1,196 @@
+name: Integration Tests
+
+on:
+  pull_request:
+    paths:
+      - 'esp32_firmware/**'
+      - 'tests/integration/**'
+      - '.github/workflows/integration-tests.yml'
+  push:
+    paths:
+      - 'esp32_firmware/**'
+      - 'tests/integration/**'
+      - '.github/workflows/integration-tests.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web-interface-tests:
+    runs-on: ubuntu-latest
+    name: Web Interface Integration Tests
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: Install test dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r tests/config/requirements.txt
+        
+        # Install browser drivers for Selenium
+        sudo apt-get update
+        sudo apt-get install -y chromium-browser
+        
+    - name: Setup Chrome for Selenium
+      uses: browser-actions/setup-chrome@latest
+      with:
+        chrome-version: stable
+        
+    - name: Run web interface tests
+      run: |
+        cd tests/integration
+        python -m pytest test_web_interface.py -v --tb=short \
+          --html=web_interface_report.html --self-contained-html
+          
+    - name: Upload web interface test report
+      uses: actions/upload-artifact@v4
+      with:
+        name: web-interface-test-report-${{ github.sha }}
+        path: tests/integration/web_interface_report.html
+        retention-days: 30
+        
+  api-validation-tests:
+    runs-on: ubuntu-latest
+    name: API Validation Tests
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: Install test dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r tests/config/requirements.txt
+        
+    - name: Start mock ESP32 server
+      run: |
+        cd tests/integration
+        python mock_esp32_server.py &
+        echo $! > mock_server.pid
+        sleep 5  # Give server time to start
+        
+    - name: Run API endpoint tests
+      run: |
+        cd tests/integration
+        python -m pytest test_api_endpoints.py -v --tb=short \
+          --html=api_validation_report.html --self-contained-html
+          
+    - name: Stop mock server
+      run: |
+        cd tests/integration
+        if [ -f mock_server.pid ]; then
+          kill $(cat mock_server.pid) || true
+          rm mock_server.pid
+        fi
+        
+    - name: Upload API validation test report
+      uses: actions/upload-artifact@v4
+      with:
+        name: api-validation-test-report-${{ github.sha }}
+        path: tests/integration/api_validation_report.html
+        retention-days: 30
+        
+  system-integration-tests:
+    runs-on: ubuntu-latest
+    name: System Integration Tests
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: Install test dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r tests/config/requirements.txt
+        
+    - name: Run system integration tests
+      run: |
+        cd tests/integration
+        python -m pytest test_system_integration.py -v --tb=short \
+          --html=system_integration_report.html --self-contained-html
+          
+    - name: Upload system integration test report
+      uses: actions/upload-artifact@v4
+      with:
+        name: system-integration-test-report-${{ github.sha }}
+        path: tests/integration/system_integration_report.html
+        retention-days: 30
+        
+  generate-combined-report:
+    runs-on: ubuntu-latest
+    name: Generate Combined Test Report
+    needs: [web-interface-tests, api-validation-tests, system-integration-tests]
+    if: always()
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Download all test reports
+      uses: actions/download-artifact@v4
+      with:
+        pattern: "*-test-report-${{ github.sha }}"
+        path: test-reports/
+        
+    - name: Generate combined report
+      run: |
+        mkdir -p combined-reports
+        
+        echo "# Integration Test Results" > combined-reports/INTEGRATION_TEST_SUMMARY.md
+        echo "" >> combined-reports/INTEGRATION_TEST_SUMMARY.md
+        echo "## Test Execution Summary" >> combined-reports/INTEGRATION_TEST_SUMMARY.md
+        echo "- **Timestamp**: $(date)" >> combined-reports/INTEGRATION_TEST_SUMMARY.md
+        echo "- **Commit**: ${{ github.sha }}" >> combined-reports/INTEGRATION_TEST_SUMMARY.md
+        echo "- **Branch**: ${{ github.ref_name }}" >> combined-reports/INTEGRATION_TEST_SUMMARY.md
+        echo "" >> combined-reports/INTEGRATION_TEST_SUMMARY.md
+        
+        echo "## Test Categories" >> combined-reports/INTEGRATION_TEST_SUMMARY.md
+        echo "- **Web Interface Tests**: Browser-based UI testing" >> combined-reports/INTEGRATION_TEST_SUMMARY.md
+        echo "- **API Validation Tests**: REST endpoint validation" >> combined-reports/INTEGRATION_TEST_SUMMARY.md  
+        echo "- **System Integration Tests**: Cross-component testing" >> combined-reports/INTEGRATION_TEST_SUMMARY.md
+        echo "" >> combined-reports/INTEGRATION_TEST_SUMMARY.md
+        
+        echo "## Test Reports" >> combined-reports/INTEGRATION_TEST_SUMMARY.md
+        if [ -d "test-reports" ]; then
+          for report in test-reports/*/*.html; do
+            if [ -f "$report" ]; then
+              report_name=$(basename "$report")
+              echo "- [$report_name]($report_name)" >> combined-reports/INTEGRATION_TEST_SUMMARY.md
+              cp "$report" combined-reports/
+            fi
+          done
+        fi
+        
+        echo "" >> combined-reports/INTEGRATION_TEST_SUMMARY.md
+        echo "## Integration Coverage" >> combined-reports/INTEGRATION_TEST_SUMMARY.md
+        echo "- **ESP32 Web Server**: HTTP endpoints, WebSocket connections" >> combined-reports/INTEGRATION_TEST_SUMMARY.md
+        echo "- **USB Communication**: Mock BMCU370 protocol validation" >> combined-reports/INTEGRATION_TEST_SUMMARY.md
+        echo "- **Data Flow**: Sensor data → Processing → Web display" >> combined-reports/INTEGRATION_TEST_SUMMARY.md
+        echo "- **Configuration**: WiFi setup, parameter management" >> combined-reports/INTEGRATION_TEST_SUMMARY.md
+        echo "- **Error Handling**: Timeout, disconnect, recovery scenarios" >> combined-reports/INTEGRATION_TEST_SUMMARY.md
+        
+    - name: Upload combined test reports
+      uses: actions/upload-artifact@v4
+      with:
+        name: integration-test-combined-report-${{ github.sha }}
+        path: combined-reports/
+        retention-days: 60

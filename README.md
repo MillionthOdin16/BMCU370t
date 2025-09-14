@@ -37,12 +37,70 @@ This repository now includes a complete USB communication foundation with ESP32 
                     [DFU Preservation]   [Data Export]
 ```
 
-## 🛠️ Build Status
+## 🛠️ Build Status & CI Pipeline
+
+[![Build and Quality Analysis](https://github.com/MillionthOdin16/BMCU370t/actions/workflows/build-firmware.yml/badge.svg)](https://github.com/MillionthOdin16/BMCU370t/actions/workflows/build-firmware.yml)
+[![Simulation Tests](https://github.com/MillionthOdin16/BMCU370t/actions/workflows/simulation-tests.yml/badge.svg)](https://github.com/MillionthOdin16/BMCU370t/actions/workflows/simulation-tests.yml)
+[![Integration Tests](https://github.com/MillionthOdin16/BMCU370t/actions/workflows/integration-tests.yml/badge.svg)](https://github.com/MillionthOdin16/BMCU370t/actions/workflows/integration-tests.yml)
+
+### Current Build Status
 - **BMCU370**: 68.3% Flash, 63.6% RAM
 - **ESP32**: 71.0% Flash, 15.9% RAM
 
+### Automated Testing Pipeline
+
+This project features a comprehensive **multi-stage automated CI/CD pipeline** designed specifically for embedded firmware development:
+
+#### 🔍 **Stage 1: Code Quality & Static Analysis**
+- **cppcheck**: Static analysis for C/C++ bugs and undefined behavior
+- **clang-tidy**: Modern C++ style and safety checks
+- **cpplint**: Google C++ style guide compliance
+- **lizard**: Cyclomatic complexity analysis (CCN < 15)
+
+#### 🏗️ **Stage 2: Build Verification**
+- **BMCU370 (CH32V203)**: PlatformIO build with memory usage reporting
+- **ESP32-S3**: PlatformIO build with LittleFS filesystem generation
+- **Artifact Creation**: Automated firmware binary packaging
+
+#### 🧪 **Stage 3: Unit & Simulation Testing**
+- **Unit Tests**: Unity framework for individual component testing
+- **Mock BMCU370**: Python simulator for ESP32 testing without hardware
+- **Protocol Validation**: USB CDC communication testing
+- **Edge Case Testing**: Error conditions and recovery scenarios
+
+#### 🔗 **Stage 4: Integration Testing**
+- **Web Interface**: Selenium-based browser testing
+- **REST API**: Endpoint validation with real HTTP requests
+- **System Integration**: Cross-component interaction testing
+- **JSON Schema**: API contract validation
+
+#### 🔧 **Stage 5: Hardware-in-the-Loop (HIL) Testing**
+- **Real Hardware**: Physical ESP32-S3 and CH32V203 testing
+- **Live Communication**: Actual USB CDC protocol validation
+- **Hardware Control**: LED, motor, sensor verification
+- **End-to-End**: Complete system workflow testing
+
+See [CI Pipeline Design](CI_PIPELINE_DESIGN.md) for detailed technical specifications.
+
 ## 📦 Firmware Builds
 Firmware binaries are automatically built for both targets on every PR and push via GitHub Actions. Download artifacts from the Actions tab or releases.
+
+### Automated Quality Assurance
+- **Static Analysis**: Every commit analyzed for bugs and style compliance
+- **Unit Testing**: Component-level validation with Unity framework
+- **Simulation Testing**: Mock hardware testing for rapid feedback
+- **Integration Testing**: Web interface and API validation
+- **HIL Testing**: Real hardware validation on self-hosted runners
+
+### Test Infrastructure
+```
+tests/
+├── unit/           # Unit tests for BMCU370 and ESP32 components
+├── simulation/     # Mock BMCU370 and protocol validation
+├── integration/    # Web interface and API testing
+├── hil/           # Hardware-in-the-loop testing
+└── config/        # Static analysis and test configuration
+```
 
 ## 🚀 Quick Start
 
@@ -71,6 +129,75 @@ esptool.py --chip esp32s3 --port /dev/ttyUSB0 write_flash -z \
 ## 📚 Documentation
 - [ESP32 Implementation Guide](ESP32_WEB_INTERFACE_IMPLEMENTATION.md)
 - [Integration Test Results](INTEGRATION_TEST_RESULTS.md)
+- [CI Pipeline Design](CI_PIPELINE_DESIGN.md) - **Comprehensive testing strategy**
+- [Development Setup](DEVELOPMENT.md)
+
+### Testing Documentation
+- [Test Infrastructure Overview](tests/README.md)
+- [Mock BMCU370 Simulator](tests/simulation/mock_bmcu370.py)
+- [Unit Testing Guidelines](tests/unit/)
+- [Integration Testing Setup](tests/integration/)
+- [HIL Testing Requirements](tests/hil/)
+
+## 🧪 Running Tests
+
+### Local Development Testing
+```bash
+# Install test dependencies
+pip install -r tests/config/requirements.txt
+
+# Run unit tests
+cd tests/unit && pio test
+
+# Run simulation tests
+cd tests/simulation && python -m pytest -v
+
+# Run integration tests
+cd tests/integration && python -m pytest -v
+
+# Test the mock BMCU370 simulator
+cd tests/simulation && python mock_bmcu370.py
+```
+
+### CI Pipeline Testing
+- **Automatic**: Tests run on every push and PR
+- **Manual**: Use workflow dispatch for specific test suites
+- **Scheduled**: HIL tests run daily on hardware
+
+### HIL Testing Setup
+For hardware-in-the-loop testing with real devices:
+
+#### Self-Hosted Runner Requirements
+```bash
+# Ubuntu 20.04+ with hardware access
+sudo apt-get install python3 python3-pip
+pip3 install platformio esptool dfu-util pytest
+
+# Add user to dialout group for device access
+sudo usermod -a -G dialout $USER
+
+# Install GitHub Actions runner
+# Follow: https://github.com/actions/runner
+```
+
+#### Required Hardware
+- ESP32-S3 N4R2 development board
+- CH32V203 development board (BMCU370)
+- USB cables and connections
+- Power supplies
+
+#### GitHub Secrets Configuration
+No additional secrets required for basic HIL testing. Optional secrets:
+- `WOKWI_TOKEN`: For enhanced ESP32 simulation (if using Wokwi)
+
+#### Running HIL Tests
+```bash
+# Manual trigger via GitHub Actions UI
+# Or use workflow dispatch API
+gh workflow run hil-validation.yml \
+  -f test_suite=full \
+  -f flash_firmware=true
+```
 
 # 链接
 - english wiki: https://wiki.yuekai.fr/
