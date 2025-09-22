@@ -612,9 +612,9 @@ bool set_motion(unsigned char read_num, unsigned char statu_flags, unsigned char
         {
             if ((statu_flags == 0x03) && (fliment_motion_flag == 0x00)) // 03 00(FF)
             {
-                _filament *filament = &(data_save.filament[data_save.BambuBus_now_filament_num]);
                 if (data_save.BambuBus_now_filament_num < 4)
                 {
+                    _filament *filament = &(data_save.filament[data_save.BambuBus_now_filament_num]);
                     if (filament->motion_set == AMS_filament_motion::on_use)
                     {
                         filament->motion_set = AMS_filament_motion::need_pull_back;

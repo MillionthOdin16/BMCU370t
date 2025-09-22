@@ -20,7 +20,7 @@ int MC_ONLINE_key_stu[4] = {0, 0, 0, 0};
 // 电压控制相关常量
 float PULL_voltage_up = 1.85f;   // 状态 压力高 红灯
 float PULL_voltage_down = 1.45f; // 状态 压力低 蓝灯
-#define PULL_VOLTAGE_SEND_MAX 1.7f
+#define PULL_VOLTAGE_SEND_MAX 1.75f  // 增加压力阈值容忍度，避免过早停止送料
 // 微动触发控制相关常量
 bool Assist_send_filament[4] = {false, false, false, false};
 bool pull_state_old = false; // 上次触发状态——True：未触发，False：进料完成
@@ -377,7 +377,7 @@ public:
                         if (MC_PULL_stu_raw[CHx] < PULL_VOLTAGE_SEND_MAX) // 压力主动到这个位置
                             speed_set = 30;
                         else
-                            speed_set = 0; // 原版这里是 10
+                            speed_set = 10; // 遇到阻力时减速但不停止，保持推进能力
                     }
                     else
                     {
