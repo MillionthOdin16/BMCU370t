@@ -30,7 +30,7 @@ struct _filament
     uint16_t pressure = 0xFFFF;
 };
 
-#define use_flash_addr ((uint32_t)0x0800F000)
+#define use_flash_addr ((uint32_t)0x0800FC00) // 移动到Flash末尾：63KB位置，远离固件区域
 
 struct alignas(4) flash_save_struct
 {

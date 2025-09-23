@@ -120,7 +120,7 @@ struct alignas(4) Motion_control_save_struct
     int check = 0x40614061;
 } Motion_control_data_save;
 
-#define Motion_control_save_flash_addr ((uint32_t)0x0800E000)
+#define Motion_control_save_flash_addr ((uint32_t)0x0800F800) // 移动到Flash末尾：62KB位置
 bool Motion_control_read()
 {
     Motion_control_save_struct *ptr = (Motion_control_save_struct *)(Motion_control_save_flash_addr);
