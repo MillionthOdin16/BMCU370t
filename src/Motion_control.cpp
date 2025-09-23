@@ -581,19 +581,19 @@ void motor_motion_switch() // 通道状态切换函数，只控制当前在使�
             case AMS_filament_motion::before_pull_back:
             case AMS_filament_motion::on_use:
             {
-                static uint64_t time_end = 0;
+                static uint64_t time_end[4] = {0, 0, 0, 0}; // 修复：每个通道独立的时间结束点
                 uint64_t time_now = get_time64();
                 if (filament_now_position[num] == filament_sending_out) // 如果通道刚开始进料
                 {
                     is_backing_out = false; // 设置无需记录距离
                     pull_state_old = true; // 首次不会往后拽，会等待触发低电压位，避免刚进入料就被拉出。
                     filament_now_position[num] = filament_using; // 标记为使用中
-                    time_end = time_now + 1500;                  // 防止未被咬合, 持续进1.5秒
+                    time_end[num] = time_now + 1500;                  // 防止未被咬合, 持续进1.5秒
                 }
                 else if (filament_now_position[num] == filament_using) // 已经触发且处于使用中
                 {
-                    last_total_distance[i] = 0; // 重置退料距离
-                    if (time_now > time_end)
+                    last_total_distance[num] = 0; // 修复：使用正确的通道索引重置退料距离
+                    if (time_now > time_end[num])
                     {                                          // 已超1.5秒，进入通道使用 进行续料
                         MC_STU_RGB_set(num, 255, 255, 255); // 白色
                         MOTOR_CONTROL[num].set_motion(filament_motion_enum::filament_motion_pressure_ctrl_on_use, 20);
