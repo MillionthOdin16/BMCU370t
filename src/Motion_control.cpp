@@ -25,12 +25,6 @@ float PULL_voltage_down = 1.45f; // 状态 压力低 蓝灯
 bool Assist_send_filament[4] = {false, false, false, false};
 bool pull_state_old = false; // 上次触发状态——True：未触发，False：进料完成
 bool is_backing_out = false;
-// 新增：自适应压力控制变量
-bool gentle_pressure_mode[4] = {false, false, false, false}; // 温和压力模式（用于困难耗材）
-uint64_t pressure_oscillation_timer[4] = {0, 0, 0, 0}; // 压力振荡检测计时器
-float last_pressure_reading[4] = {0, 0, 0, 0}; // 上次压力读数
-#define GENTLE_MODE_ENABLE_TIME 5000 // 5秒持续振荡后启用温和模式
-#define PRESSURE_CHANGE_THRESHOLD 0.1f // 压力变化阈值
 uint64_t Assist_filament_time[4] = {0, 0, 0, 0};
 uint64_t Assist_send_time = 1200; // 仅触发外侧后，送料时长
 // 退料距离 单位 MM
@@ -353,40 +347,18 @@ public:
         {
             if (motion == filament_motion_enum::filament_motion_pressure_ctrl_on_use) // 在使用状态
             {
-                // 新增：检测压力振荡并启用温和压力模式
-                float pressure_change = fabs(MC_PULL_stu_raw[CHx] - last_pressure_reading[CHx]);
-                uint64_t time_now = get_time64();
-                
-                if (pressure_change > PRESSURE_CHANGE_THRESHOLD && MC_PULL_stu_raw[CHx] > 1.6f) {
-                    // 检测到压力振荡，开始或继续计时
-                    if (pressure_oscillation_timer[CHx] == 0) {
-                        pressure_oscillation_timer[CHx] = time_now;
-                    } else if (time_now - pressure_oscillation_timer[CHx] > GENTLE_MODE_ENABLE_TIME) {
-                        gentle_pressure_mode[CHx] = true; // 启用温和模式
-                    }
-                } else {
-                    pressure_oscillation_timer[CHx] = 0; // 重置计时器
-                }
-                last_pressure_reading[CHx] = MC_PULL_stu_raw[CHx];
-                
                 if (pull_state_old) { // 首次进入使用中，不触发后退，冲刷会让缓冲归位.
                     if (MC_PULL_stu_raw[CHx] < 1.55){
                         pull_state_old = false; // 检测到耗材已处于低压力。
                     }
                 } else {
-                    // 根据模式调整压力控制阈值
-                    float low_threshold = gentle_pressure_mode[CHx] ? 1.6f : 1.65f;   // 温和模式降低阈值
-                    float high_threshold = gentle_pressure_mode[CHx] ? 1.75f : 1.7f;  // 温和模式提高阈值
-                    
-                    if (MC_PULL_stu_raw[CHx] < low_threshold)
+                    if (MC_PULL_stu_raw[CHx] < 1.65)
                     {
-                        x = _get_x_by_pressure(MC_PULL_stu_raw[CHx], low_threshold, time_E, pressure_control_enum::less_pressure);
-                        if (gentle_pressure_mode[CHx]) x *= 0.5f; // 温和模式减少控制强度
+                        x = _get_x_by_pressure(MC_PULL_stu_raw[CHx], 1.65, time_E, pressure_control_enum::less_pressure);
                     }
-                    else if (MC_PULL_stu_raw[CHx] > high_threshold)
+                    else if (MC_PULL_stu_raw[CHx] > 1.7)
                     {
-                        x = _get_x_by_pressure(MC_PULL_stu_raw[CHx], high_threshold, time_E, pressure_control_enum::over_pressure);
-                        if (gentle_pressure_mode[CHx]) x *= 0.3f; // 温和模式大幅减少阻力
+                        x = _get_x_by_pressure(MC_PULL_stu_raw[CHx], 1.7, time_E, pressure_control_enum::over_pressure);
                     }
                 }
             }
