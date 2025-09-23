@@ -65,6 +65,22 @@ int get_now_filament_num()
 {
     return data_save.BambuBus_now_filament_num;
 }
+
+// 新增：检测当前通道是否设置为品红色（温和模式触发器）
+bool is_gentle_mode_requested(int channel)
+{
+    if (channel < 0 || channel >= 4) return false;
+    
+    // 获取当前活动的耗材通道
+    int current_filament = get_now_filament_num();
+    if (current_filament != channel) return false;
+    
+    // 检查颜色是否为品红色 (R=255, G=0, B=255, A=255)
+    return (data_save.filament[channel].color_R == 255 &&
+            data_save.filament[channel].color_G == 0 &&
+            data_save.filament[channel].color_B == 255 &&
+            data_save.filament[channel].color_A == 255);
+}
 uint16_t get_now_BambuBus_device_type()
 {
     return BambuBus_address;

@@ -25,6 +25,8 @@ float PULL_voltage_down = 1.45f; // 状态 压力低 蓝灯
 bool Assist_send_filament[4] = {false, false, false, false};
 bool pull_state_old = false; // 上次触发状态——True：未触发，False：进料完成
 bool is_backing_out = false;
+// 新增：低质量耗材支持系统 - 通过品红色触发
+bool gentle_mode_enabled[4] = {false, false, false, false}; // 每通道的温和模式状态
 uint64_t Assist_filament_time[4] = {0, 0, 0, 0};
 uint64_t Assist_send_time = 1200; // 仅触发外侧后，送料时长
 // 退料距离 单位 MM
@@ -347,18 +349,28 @@ public:
         {
             if (motion == filament_motion_enum::filament_motion_pressure_ctrl_on_use) // 在使用状态
             {
+                // 新增：检查是否启用温和模式（品红色耗材）
+                gentle_mode_enabled[CHx] = is_gentle_mode_requested(CHx);
+                
                 if (pull_state_old) { // 首次进入使用中，不触发后退，冲刷会让缓冲归位.
                     if (MC_PULL_stu_raw[CHx] < 1.55){
                         pull_state_old = false; // 检测到耗材已处于低压力。
                     }
                 } else {
-                    if (MC_PULL_stu_raw[CHx] < 1.65)
-                    {
-                        x = _get_x_by_pressure(MC_PULL_stu_raw[CHx], 1.65, time_E, pressure_control_enum::less_pressure);
-                    }
-                    else if (MC_PULL_stu_raw[CHx] > 1.7)
-                    {
-                        x = _get_x_by_pressure(MC_PULL_stu_raw[CHx], 1.7, time_E, pressure_control_enum::over_pressure);
+                    // 温和模式：完全禁用压力控制，让挤出机自由运行
+                    if (gentle_mode_enabled[CHx]) {
+                        // 温和模式：不施加任何压力控制，给挤出机最大自由度
+                        x = 0; // 完全禁用压力控制力
+                    } else {
+                        // 正常模式：标准压力控制
+                        if (MC_PULL_stu_raw[CHx] < 1.65)
+                        {
+                            x = _get_x_by_pressure(MC_PULL_stu_raw[CHx], 1.65, time_E, pressure_control_enum::less_pressure);
+                        }
+                        else if (MC_PULL_stu_raw[CHx] > 1.7)
+                        {
+                            x = _get_x_by_pressure(MC_PULL_stu_raw[CHx], 1.7, time_E, pressure_control_enum::over_pressure);
+                        }
                     }
                 }
             }
@@ -608,6 +620,7 @@ void motor_motion_switch() // 通道状态切换函数，只控制当前在使�
             }
             case AMS_filament_motion::idle:
                 filament_now_position[num] = filament_idle;
+                gentle_mode_enabled[num] = false; // 新增：重置温和模式状态
                 MOTOR_CONTROL[num].set_motion(filament_motion_enum::filament_motion_pressure_ctrl_idle, 100);
                 for (int i = 0; i < 4; i++)
                 {
@@ -631,6 +644,7 @@ void motor_motion_switch() // 通道状态切换函数，只控制当前在使�
         else if (MC_ONLINE_key_stu[num] == 0) // 0:一定没有耗材丝，1:同时触发一定有耗材丝 2:仅外部触发 3:仅内部触发，这里有防掉线功能
         {
             filament_now_position[num] = filament_idle;
+            gentle_mode_enabled[num] = false; // 新增：重置温和模式状态
             MOTOR_CONTROL[num].set_motion(filament_motion_enum::filament_motion_pressure_ctrl_idle, 100);
             // MC_STU_RGB_set(num, 0, 0, 255);
         }
