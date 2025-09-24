@@ -204,5 +204,13 @@ void loop()
         {
             Motion_control_run(error);
         }
+        
+        // Periodic sensor monitoring for debugging (every 5 seconds)
+        static unsigned long last_sensor_debug_time = 0;
+        unsigned long now_debug = get_time64();
+        if (now_debug - last_sensor_debug_time >= 5000) { // 5 second interval
+            DEBUG_sensors();
+            last_sensor_debug_time = now_debug;
+        }
     }
 }

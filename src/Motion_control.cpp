@@ -50,7 +50,7 @@ void MC_PULL_ONLINE_read()
 
     for (int i = 0; i < 4; i++)
     {
-        /*
+        // Enable debug output for channel 0 to show sensor readings
         if (i == 0){
             DEBUG_MY("MC_PULL_stu_raw = ");
             DEBUG_float(MC_PULL_stu_raw[i],3);
@@ -60,7 +60,6 @@ void MC_PULL_ONLINE_read()
             DEBUG_float(i,1);
             DEBUG_MY("   \n");
         }
-        */
         if (MC_PULL_stu_raw[i] > PULL_voltage_up) // 大于1.85V,表示压力过高
         {
             MC_PULL_stu[i] = 1;
