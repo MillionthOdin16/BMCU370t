@@ -25,6 +25,8 @@ float PULL_voltage_down = 1.45f; // 状态 压力低 蓝灯
 bool Assist_send_filament[4] = {false, false, false, false};
 bool pull_state_old = false; // 上次触发状态——True：未触发，False：进料完成
 bool is_backing_out = false;
+// 新增：低质量耗材支持系统 - 通过品红色触发
+bool gentle_mode_enabled[4] = {false, false, false, false}; // 每通道的温和模式状态
 uint64_t Assist_filament_time[4] = {0, 0, 0, 0};
 uint64_t Assist_send_time = 1200; // 仅触发外侧后，送料时长
 // 退料距离 单位 MM
@@ -48,7 +50,7 @@ void MC_PULL_ONLINE_read()
 
     for (int i = 0; i < 4; i++)
     {
-        /*
+        // Enable debug output for channel 0 to show sensor readings
         if (i == 0){
             DEBUG_MY("MC_PULL_stu_raw = ");
             DEBUG_float(MC_PULL_stu_raw[i],3);
@@ -58,7 +60,6 @@ void MC_PULL_ONLINE_read()
             DEBUG_float(i,1);
             DEBUG_MY("   \n");
         }
-        */
         if (MC_PULL_stu_raw[i] > PULL_voltage_up) // 大于1.85V,表示压力过高
         {
             MC_PULL_stu[i] = 1;
@@ -118,7 +119,7 @@ struct alignas(4) Motion_control_save_struct
     int check = 0x40614061;
 } Motion_control_data_save;
 
-#define Motion_control_save_flash_addr ((uint32_t)0x0800E000)
+#define Motion_control_save_flash_addr ((uint32_t)0x0800F800) // 移动到Flash末尾：62KB位置
 bool Motion_control_read()
 {
     Motion_control_save_struct *ptr = (Motion_control_save_struct *)(Motion_control_save_flash_addr);
@@ -347,18 +348,28 @@ public:
         {
             if (motion == filament_motion_enum::filament_motion_pressure_ctrl_on_use) // 在使用状态
             {
+                // 新增：检查是否启用温和模式（品红色耗材）
+                gentle_mode_enabled[CHx] = is_gentle_mode_requested(CHx);
+                
                 if (pull_state_old) { // 首次进入使用中，不触发后退，冲刷会让缓冲归位.
                     if (MC_PULL_stu_raw[CHx] < 1.55){
                         pull_state_old = false; // 检测到耗材已处于低压力。
                     }
                 } else {
-                    if (MC_PULL_stu_raw[CHx] < 1.65)
-                    {
-                        x = _get_x_by_pressure(MC_PULL_stu_raw[CHx], 1.65, time_E, pressure_control_enum::less_pressure);
-                    }
-                    else if (MC_PULL_stu_raw[CHx] > 1.7)
-                    {
-                        x = _get_x_by_pressure(MC_PULL_stu_raw[CHx], 1.7, time_E, pressure_control_enum::over_pressure);
+                    // 温和模式：完全禁用压力控制，让挤出机自由运行
+                    if (gentle_mode_enabled[CHx]) {
+                        // 温和模式：不施加任何压力控制，给挤出机最大自由度
+                        x = 0; // 完全禁用压力控制力
+                    } else {
+                        // 正常模式：标准压力控制
+                        if (MC_PULL_stu_raw[CHx] < 1.65)
+                        {
+                            x = _get_x_by_pressure(MC_PULL_stu_raw[CHx], 1.65, time_E, pressure_control_enum::less_pressure);
+                        }
+                        else if (MC_PULL_stu_raw[CHx] > 1.7)
+                        {
+                            x = _get_x_by_pressure(MC_PULL_stu_raw[CHx], 1.7, time_E, pressure_control_enum::over_pressure);
+                        }
                     }
                 }
             }
@@ -377,7 +388,7 @@ public:
                         if (MC_PULL_stu_raw[CHx] < PULL_VOLTAGE_SEND_MAX) // 压力主动到这个位置
                             speed_set = 30;
                         else
-                            speed_set = 0; // 原版这里是 10
+                            speed_set = 10; // 恢复原版设计：遇到阻力时减速但不停止，保持推进能力
                     }
                     else
                     {
@@ -581,19 +592,19 @@ void motor_motion_switch() // 通道状态切换函数，只控制当前在使�
             case AMS_filament_motion::before_pull_back:
             case AMS_filament_motion::on_use:
             {
-                static uint64_t time_end = 0;
+                static uint64_t time_end[4] = {0, 0, 0, 0}; // 修复：每个通道独立的时间结束点
                 uint64_t time_now = get_time64();
                 if (filament_now_position[num] == filament_sending_out) // 如果通道刚开始进料
                 {
                     is_backing_out = false; // 设置无需记录距离
                     pull_state_old = true; // 首次不会往后拽，会等待触发低电压位，避免刚进入料就被拉出。
                     filament_now_position[num] = filament_using; // 标记为使用中
-                    time_end = time_now + 1500;                  // 防止未被咬合, 持续进1.5秒
+                    time_end[num] = time_now + 1500;                  // 防止未被咬合, 持续进1.5秒
                 }
                 else if (filament_now_position[num] == filament_using) // 已经触发且处于使用中
                 {
-                    last_total_distance[i] = 0; // 重置退料距离
-                    if (time_now > time_end)
+                    last_total_distance[num] = 0; // 修复：使用正确的通道索引重置退料距离
+                    if (time_now > time_end[num])
                     {                                          // 已超1.5秒，进入通道使用 进行续料
                         MC_STU_RGB_set(num, 255, 255, 255); // 白色
                         MOTOR_CONTROL[num].set_motion(filament_motion_enum::filament_motion_pressure_ctrl_on_use, 20);
@@ -608,6 +619,7 @@ void motor_motion_switch() // 通道状态切换函数，只控制当前在使�
             }
             case AMS_filament_motion::idle:
                 filament_now_position[num] = filament_idle;
+                gentle_mode_enabled[num] = false; // 新增：重置温和模式状态
                 MOTOR_CONTROL[num].set_motion(filament_motion_enum::filament_motion_pressure_ctrl_idle, 100);
                 for (int i = 0; i < 4; i++)
                 {
@@ -631,6 +643,7 @@ void motor_motion_switch() // 通道状态切换函数，只控制当前在使�
         else if (MC_ONLINE_key_stu[num] == 0) // 0:一定没有耗材丝，1:同时触发一定有耗材丝 2:仅外部触发 3:仅内部触发，这里有防掉线功能
         {
             filament_now_position[num] = filament_idle;
+            gentle_mode_enabled[num] = false; // 新增：重置温和模式状态
             MOTOR_CONTROL[num].set_motion(filament_motion_enum::filament_motion_pressure_ctrl_idle, 100);
             // MC_STU_RGB_set(num, 0, 0, 255);
         }

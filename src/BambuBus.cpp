@@ -30,7 +30,7 @@ struct _filament
     uint16_t pressure = 0xFFFF;
 };
 
-#define use_flash_addr ((uint32_t)0x0800F000)
+#define use_flash_addr ((uint32_t)0x0800FC00) // 移动到Flash末尾：63KB位置，远离固件区域
 
 struct alignas(4) flash_save_struct
 {
@@ -44,11 +44,48 @@ struct alignas(4) flash_save_struct
 bool Bambubus_read()
 {
     flash_save_struct *ptr = (flash_save_struct *)(use_flash_addr);
-    if ((ptr->check == 0x40614061) && (ptr->version == Bambubus_version))
+    
+    // 新增：增强的版本兼容性检查 - 保持耗材数据在固件更新间持久
+    if (ptr->check == 0x40614061) // 首先验证数据完整性检查和
     {
-        memcpy(&data_save, ptr, sizeof(data_save));
-        return true;
+        if (ptr->version == Bambubus_version) 
+        {
+            // 完全匹配：直接加载所有数据
+            memcpy(&data_save, ptr, sizeof(data_save));
+            return true;
+        }
+        else if (ptr->version < Bambubus_version && ptr->version >= 3) // 向后兼容版本3+
+        {
+            // 部分兼容：保留耗材数据，更新版本和其他字段
+            memcpy(&data_save, ptr, sizeof(data_save));
+            
+            // 更新版本以匹配当前固件
+            data_save.version = Bambubus_version;
+            
+            // 验证并清理可能不兼容的状态数据
+            if (data_save.BambuBus_now_filament_num > 3) {
+                data_save.BambuBus_now_filament_num = 0xFF; // 重置为无效状态
+            }
+            
+            // 清理运行时状态，保留配置数据
+            data_save.filament_use_flag = 0x00;
+            for (int i = 0; i < 4; i++) {
+                // 保留耗材配置（颜色、名称、温度等）
+                // 但重置运行时状态
+                data_save.filament[i].motion_set = AMS_filament_motion::idle;
+                data_save.filament[i].meters = 0;
+                data_save.filament[i].meters_virtual_count = 0;
+                // 压力数据重置为默认
+                data_save.filament[i].pressure = 0xFFFF;
+            }
+            
+            // 标记需要保存更新后的数据
+            Bambubus_set_need_to_save();
+            return true;
+        }
     }
+    
+    // 数据损坏或版本太旧：返回false使用默认值
     return false;
 }
 bool Bambubus_need_to_save = false;
@@ -64,6 +101,22 @@ void Bambubus_save()
 int get_now_filament_num()
 {
     return data_save.BambuBus_now_filament_num;
+}
+
+// 新增：检测当前通道是否设置为品红色（温和模式触发器）
+bool is_gentle_mode_requested(int channel)
+{
+    if (channel < 0 || channel >= 4) return false;
+    
+    // 获取当前活动的耗材通道
+    int current_filament = get_now_filament_num();
+    if (current_filament != channel) return false;
+    
+    // 检查颜色是否为品红色 (R=255, G=0, B=255, A=255)
+    return (data_save.filament[channel].color_R == 255 &&
+            data_save.filament[channel].color_G == 0 &&
+            data_save.filament[channel].color_B == 255 &&
+            data_save.filament[channel].color_A == 255);
 }
 uint16_t get_now_BambuBus_device_type()
 {
@@ -612,9 +665,9 @@ bool set_motion(unsigned char read_num, unsigned char statu_flags, unsigned char
         {
             if ((statu_flags == 0x03) && (fliment_motion_flag == 0x00)) // 03 00(FF)
             {
-                _filament *filament = &(data_save.filament[data_save.BambuBus_now_filament_num]);
                 if (data_save.BambuBus_now_filament_num < 4)
                 {
+                    _filament *filament = &(data_save.filament[data_save.BambuBus_now_filament_num]);
                     if (filament->motion_set == AMS_filament_motion::on_use)
                     {
                         filament->motion_set = AMS_filament_motion::need_pull_back;

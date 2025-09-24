@@ -54,6 +54,7 @@ extern "C"
     extern bool Bambubus_read();
     extern void Bambubus_set_need_to_save();
     extern int get_now_filament_num();
+    extern bool is_gentle_mode_requested(int channel); // 新增：检测品红色温和模式
     extern uint16_t get_now_BambuBus_device_type();
     extern void reset_filament_meters(int num);
     extern void add_filament_meters(int num, float meters);
