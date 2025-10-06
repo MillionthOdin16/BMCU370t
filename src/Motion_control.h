@@ -18,3 +18,30 @@ extern void reset_all_learned_directions();
 extern void start_loading_direction_detection(int channel);
 extern void update_loading_direction_detection(int channel);
 extern void complete_loading_direction_detection(int channel);
+
+// Adaptive pressure control functions
+extern void adaptive_pressure_init();
+extern void calibrate_pressure_sensor(int channel);
+extern int calculate_adaptive_pressure_status(int channel);
+extern float get_adaptive_pressure_target(int channel);
+extern float get_early_pressure_response(int channel);
+extern void reset_adaptive_pressure_calibration(int channel);
+extern void reset_all_adaptive_pressure_calibration();
+extern bool get_adaptive_pressure_status(int channel, float* zero_point, float* high_threshold, 
+                                        float* low_threshold, bool* calibrated);
+extern void force_pressure_recalibration(int channel);
+
+// Runtime pressure sensitivity tuning functions
+extern void set_pressure_sensitivity(float proportional_gain, float high_multiplier, 
+                                    float low_multiplier, float response_smoothing);
+extern void set_pressure_sensitivity_preset(int preset);
+extern void get_pressure_sensitivity(float* proportional_gain, float* high_multiplier, 
+                                    float* low_multiplier, float* response_smoothing);
+extern void reset_pressure_sensitivity();
+extern void increase_pressure_sensitivity();
+extern void decrease_pressure_sensitivity();
+
+// Debug helper functions for pressure tuning
+extern void debug_print_pressure_sensitivity();
+extern void debug_print_pressure_calibration();
+extern void debug_print_pressure_readings();

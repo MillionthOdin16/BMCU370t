@@ -61,10 +61,86 @@
 // Motion Control Configuration
 // =============================================================================
 
-// Voltage thresholds for filament detection (in Volts)
+// Legacy voltage thresholds (used as fallback when adaptive control is disabled)
 #define PULL_VOLTAGE_HIGH       1.85f       ///< High pressure threshold (red LED)
 #define PULL_VOLTAGE_LOW        1.45f       ///< Low pressure threshold (blue LED)
 #define PULL_VOLTAGE_SEND_MAX   1.7f        ///< Maximum voltage for sending filament
+
+// =============================================================================
+// Adaptive Pressure Control Configuration
+// =============================================================================
+
+/**
+ * Adaptive Pressure Control System
+ * 
+ * This system learns individual sensor characteristics to provide more responsive
+ * and robust filament feeding. It addresses sensor variations that cause feed failures
+ * with static thresholds.
+ * 
+ * IMPORTANT: To disable adaptive control and use legacy static thresholds,
+ * set ADAPTIVE_PRESSURE_CONTROL_ENABLED to false.
+ * 
+ * RUNTIME TUNING:
+ * The system now supports runtime adjustment of sensitivity parameters without
+ * recompiling firmware. Use these functions in your debug interface:
+ * 
+ * - increase_pressure_sensitivity() - Make more responsive (call multiple times)
+ * - decrease_pressure_sensitivity() - Make more stable (call multiple times)  
+ * - set_pressure_sensitivity_preset(0) - Conservative preset (slow, stable)
+ * - set_pressure_sensitivity_preset(1) - Normal preset (balanced, default)
+ * - set_pressure_sensitivity_preset(2) - Aggressive preset (fast, sensitive)
+ * - reset_pressure_sensitivity() - Reset to defaults
+ * 
+ * DEBUG INTERFACE:
+ * - debug_print_pressure_sensitivity() - Show current settings
+ * - debug_print_pressure_calibration() - Show calibration status
+ * - debug_print_pressure_readings() - Show live pressure values
+ * 
+ * Settings are automatically saved to flash memory and persist across reboots.
+ * 
+ * TUNING EXAMPLES (if you want to modify defaults in config.h):
+ * 
+ * For Conservative/Stable Operation (slower but very reliable):
+ * #define PRESSURE_HIGH_MULTIPLIER            1.2f
+ * #define PRESSURE_LOW_MULTIPLIER             0.8f  
+ * #define PRESSURE_PROPORTIONAL_GAIN          1.5f
+ * #define PRESSURE_RESPONSE_SMOOTHING         0.9f
+ * 
+ * For Aggressive/Fast Response (faster but may be sensitive):
+ * #define PRESSURE_HIGH_MULTIPLIER            1.4f
+ * #define PRESSURE_LOW_MULTIPLIER             0.6f
+ * #define PRESSURE_PROPORTIONAL_GAIN          3.0f
+ * #define PRESSURE_RESPONSE_SMOOTHING         0.7f
+ * 
+ * For High-Noise Environment:
+ * #define PRESSURE_NOISE_THRESHOLD            0.15f
+ * #define PRESSURE_CALIBRATION_SAMPLES        100
+ * #define PRESSURE_RESPONSE_SMOOTHING         0.85f
+ */
+#define ADAPTIVE_PRESSURE_CONTROL_ENABLED   true    ///< Enable adaptive pressure control system
+
+// Default calibration parameters (can be changed at runtime)
+#define PRESSURE_CALIBRATION_SAMPLES        50      ///< Default number of samples for sensor calibration (runtime configurable)
+#define PRESSURE_CALIBRATION_TIMEOUT_MS     3000    ///< Maximum time for calibration in ms
+#define PRESSURE_NOISE_THRESHOLD            0.1f    ///< Default maximum acceptable sensor noise in V (runtime configurable)
+
+// Default adaptive threshold calculation (can be changed at runtime)
+#define PRESSURE_HIGH_MULTIPLIER            1.3f    ///< Default multiplier for high pressure threshold (runtime configurable)
+#define PRESSURE_LOW_MULTIPLIER             0.7f    ///< Default multiplier for low pressure threshold (runtime configurable)
+#define PRESSURE_DEADBAND_VOLTAGE           0.15f   ///< Default minimum deadband around neutral point in V (runtime configurable)
+
+// Default responsive control parameters (can be changed at runtime) - tuned for smooth operation
+#define PRESSURE_EARLY_RESPONSE_ENABLED     true    ///< Default enable early pressure response (runtime configurable)
+#define PRESSURE_PROPORTIONAL_GAIN          0.3f    ///< Default proportional gain for pressure response (runtime configurable)
+#define PRESSURE_RESPONSE_SMOOTHING         0.95f   ///< Default response smoothing factor (runtime configurable)
+
+// Default range detection during operation (can be changed at runtime)
+#define PRESSURE_RANGE_LEARNING_ENABLED     true    ///< Default enable continuous range learning (runtime configurable)
+#define PRESSURE_RANGE_UPDATE_RATE          0.1f    ///< Default rate of range updates (runtime configurable)
+#define PRESSURE_MIN_RANGE_VOLTAGE          0.3f    ///< Minimum expected pressure range in V
+
+// Debug and diagnostics
+#define ADAPTIVE_PRESSURE_DEBUG_ENABLED     false   ///< Enable detailed debug output for pressure system
 
 // Timing constants (in milliseconds)
 #define ASSIST_SEND_TIME_MS     1200        ///< Filament send assist duration
