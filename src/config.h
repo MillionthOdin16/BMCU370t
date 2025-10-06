@@ -61,10 +61,69 @@
 // Motion Control Configuration
 // =============================================================================
 
-// Voltage thresholds for filament detection (in Volts)
-#define PULL_VOLTAGE_HIGH       1.85f       ///< High pressure threshold (red LED)
-#define PULL_VOLTAGE_LOW        1.45f       ///< Low pressure threshold (blue LED)
+// Legacy voltage thresholds for filament detection (in Volts) - used as fallback
+#define PULL_VOLTAGE_HIGH       1.85f       ///< High pressure threshold (red LED) - fallback
+#define PULL_VOLTAGE_LOW        1.45f       ///< Low pressure threshold (blue LED) - fallback
 #define PULL_VOLTAGE_SEND_MAX   1.7f        ///< Maximum voltage for sending filament
+
+// =============================================================================
+// Adaptive Pressure Control Configuration
+// =============================================================================
+
+/**
+ * Adaptive Pressure Control System
+ * 
+ * This system learns individual sensor characteristics for each channel and
+ * dynamically adjusts pressure thresholds based on sensor variations.
+ * This provides more responsive and accurate filament pressure control.
+ */
+#define ADAPTIVE_PRESSURE_ENABLED       true    ///< Enable adaptive pressure control system
+#define PRESSURE_DEADBAND_SCALE         0.15f   ///< Deadband around zero as fraction of sensor range (0.1-0.3 recommended)
+#define PRESSURE_HIGH_THRESHOLD_SCALE   0.25f   ///< High pressure threshold as fraction of sensor range (0.2-0.4 recommended)
+#define PRESSURE_LOW_THRESHOLD_SCALE    0.25f   ///< Low pressure threshold as fraction of sensor range (0.2-0.4 recommended)
+
+// Sensor calibration parameters
+#define PRESSURE_CALIBRATION_SAMPLES    50      ///< Number of samples for initial calibration (30-100 recommended)
+#define PRESSURE_CALIBRATION_TIME_MS    5000    ///< Maximum time for calibration in milliseconds
+#define PRESSURE_RANGE_MIN_VOLTAGE      0.2f    ///< Minimum expected sensor range in volts
+#define PRESSURE_RANGE_MAX_VOLTAGE      2.8f    ///< Maximum expected sensor range in volts
+#define PRESSURE_ZERO_TOLERANCE         0.05f   ///< Tolerance for zero point detection in volts
+#define PRESSURE_AUTO_RECALIBRATION     true    ///< Enable automatic recalibration during idle periods
+
+// Enhanced pressure control parameters
+#define PRESSURE_CONTROL_RESPONSIVE     true    ///< Enable more responsive pressure control
+#define PRESSURE_CONTROL_DEADBAND_SMALL 0.02f   ///< Small deadband for responsive control in volts
+#define PRESSURE_CONTROL_PID_P_SCALE    2.0f    ///< Scaling factor for PID proportional gain
+#define PRESSURE_CONTROL_MAX_CORRECTION 800     ///< Maximum motor correction value for pressure control
+#define PRESSURE_ACTIVE_CORRECTION      true    ///< Enable active pressure correction when drift detected
+#define PRESSURE_DRIFT_THRESHOLD        0.03f   ///< Pressure drift threshold to trigger active correction (volts)
+#define PRESSURE_CORRECTION_TIMEOUT_MS  2000    ///< Maximum time for active pressure correction (ms)
+#define PRESSURE_ADAPTIVE_DISABLE_MASK  0x00    ///< Bitmask to disable adaptive control per channel (bit 0=CH0, bit 1=CH1, etc.)
+
+// Pressure control timing
+#define PRESSURE_UPDATE_INTERVAL_MS     25      ///< Pressure measurement and control update interval (ms) - 40 Hz
+#define PRESSURE_TIMING_CONTROL_ENABLED true    ///< Enable pressure control timing limits
+
+// Advanced signal filtering for pressure readings
+#define PRESSURE_FILTERING_ENABLED      true    ///< Enable advanced signal filtering for pressure readings
+#define PRESSURE_FILTER_WINDOW_SIZE     8       ///< Moving average filter window size (4-16 recommended)
+#define PRESSURE_OUTLIER_REJECTION      true    ///< Enable outlier rejection for spurious readings
+#define PRESSURE_OUTLIER_THRESHOLD      0.15f   ///< Outlier threshold as fraction of sensor range (0.1-0.2 recommended)
+#define PRESSURE_LOWPASS_FILTER_ALPHA   0.3f    ///< Low-pass filter coefficient (0.1-0.5, lower = more filtering)
+
+// Dynamic update rate adaptation
+#define PRESSURE_ADAPTIVE_UPDATE_RATE   true    ///< Enable adaptive update rate based on system state
+#define PRESSURE_UPDATE_RATE_IDLE_MS    50      ///< Slower update rate during idle periods (20 Hz)
+#define PRESSURE_UPDATE_RATE_ACTIVE_MS  20      ///< Faster update rate during active operations (50 Hz)
+#define PRESSURE_UPDATE_RATE_CRITICAL_MS 10     ///< Emergency fast update rate for critical deviations (100 Hz)
+
+// Enhanced diagnostics and health monitoring
+#define PRESSURE_DIAGNOSTICS_ENABLED    true    ///< Enable pressure sensor health monitoring and diagnostics
+#define PRESSURE_DRIFT_MONITORING       true    ///< Monitor sensor drift over time
+#define PRESSURE_DRIFT_WARNING_THRESHOLD 0.1f   ///< Threshold for sensor drift warning (volts)
+#define PRESSURE_PERFORMANCE_METRICS    true    ///< Collect pressure control performance metrics
+#define PRESSURE_FAULT_DETECTION        true    ///< Enable automatic fault detection and recovery
+#define PRESSURE_STUCK_READING_THRESHOLD 100    ///< Number of identical readings to consider sensor stuck
 
 // Timing constants (in milliseconds)
 #define ASSIST_SEND_TIME_MS     1200        ///< Filament send assist duration
