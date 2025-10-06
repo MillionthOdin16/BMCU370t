@@ -72,27 +72,31 @@ uint16_t get_now_BambuBus_device_type()
 
 void reset_filament_meters(int num)
 {
-    if (num < 4)
+    if (num >= 0 && num < 4) {
         data_save.filament[num].meters = 0;
+    }
 }
+
 void add_filament_meters(int num, float meters)
 {
-    if (num < 4)
+    if (num >= 0 && num < 4 && meters >= 0.0f)
     {
         if ((data_save.filament[num].motion_set == AMS_filament_motion::on_use) || (data_save.filament[num].motion_set == AMS_filament_motion::need_pull_back))
             data_save.filament[num].meters += meters;
     }
 }
+
 float get_filament_meters(int num)
 {
-    if (num < 4)
+    if (num >= 0 && num < 4)
         return data_save.filament[num].meters;
     else
-        return 0;
+        return 0.0f;
 }
+
 void set_filament_online(int num, bool if_online)
 {
-    if (num < 4)
+    if (num >= 0 && num < 4)
     {
         if (if_online)
         {
@@ -103,9 +107,6 @@ void set_filament_online(int num, bool if_online)
             data_save.filament[num].statu = AMS_filament_stu::offline;
             set_filament_motion(num, AMS_filament_motion::idle);
         }
-    }
-    else
-    {
     }
 }
 
@@ -129,7 +130,7 @@ bool get_filament_online(int num)
 }
 void set_filament_motion(int num, AMS_filament_motion motion)
 {
-    if (num < 4)
+    if (num >= 0 && num < 4)
     {
         _filament *filament = &(data_save.filament[num]);
         filament->motion_set = motion;
@@ -152,9 +153,10 @@ void set_filament_motion(int num, AMS_filament_motion motion)
             }
     }
 }
+
 AMS_filament_motion get_filament_motion(int num)
 {
-    if (num < 4)
+    if (num >= 0 && num < 4)
         return data_save.filament[num].motion_set;
     else
         return AMS_filament_motion::idle;
@@ -1039,8 +1041,17 @@ void send_for_long_packge_filament(unsigned char *buf, int length)
 
     uint8_t AMS_num = printer_data_long.datas[0];
     uint8_t filament_num = printer_data_long.datas[1];
-    if (AMS_num != BambuBus_AMS_num)
+    
+    // Critical bounds checking for array access safety
+    if (AMS_num != BambuBus_AMS_num) {
         return;
+    }
+    
+    if (filament_num >= 4) {
+        DEBUG_MY("BambuBus: Invalid filament_num, ignoring request\n");
+        return;
+    }
+    
     long_packge_filament[0] = BambuBus_AMS_num;
     long_packge_filament[1] = filament_num;
     memcpy(long_packge_filament + 19, data_save.filament[filament_num].ID, sizeof(data_save.filament[filament_num].ID));

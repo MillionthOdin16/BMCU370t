@@ -324,8 +324,9 @@ class BMCU370WebInterface {
             // Wait a bit before loading the config to avoid rate limiting
             await new Promise(resolve => setTimeout(resolve, 500));
 
-            // Load configuration
-            const configResponse = await this.apiCall('/api/config');
+            // Load configuration, but don't show an error toast if it fails
+            // as the disconnected state is already handled in the UI.
+            const configResponse = await this.apiCall('/api/config', {}, false);
             if (configResponse) {
                 this.configData = configResponse;
                 this.updateConfigurationUI();
@@ -338,7 +339,7 @@ class BMCU370WebInterface {
         }
     }
 
-    async apiCall(endpoint, options = {}) {
+    async apiCall(endpoint, options = {}, showErrorToast = true) {
         try {
             const response = await fetch(endpoint, {
                 headers: {
@@ -361,10 +362,12 @@ class BMCU370WebInterface {
 
         } catch (error) {
             console.error('API call failed:', error);
-            if (error.message.includes('429')) {
-                this.showToast('Too many requests. Please wait a moment.', 'warning');
-            } else {
-                this.showToast(`API Error: ${error.message}`, 'error');
+            if (showErrorToast) {
+                if (error.message.includes('429')) {
+                    this.showToast('Too many requests. Please wait a moment.', 'warning');
+                } else {
+                    this.showToast(`API Error: ${error.message}`, 'error');
+                }
             }
             return null;
         }

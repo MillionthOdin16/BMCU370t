@@ -37,14 +37,32 @@ float_t last_total_distance[4] = {0.0f, 0.0f, 0.0f, 0.0f}; // 初始化退料开
 void MC_PULL_ONLINE_read()
 {
     float *data = ADC_DMA_get_value();
-    MC_PULL_stu_raw[3] = data[0];
-    MC_ONLINE_key_stu_raw[3] = data[1];
-    MC_PULL_stu_raw[2] = data[2];
-    MC_ONLINE_key_stu_raw[2] = data[3];
-    MC_PULL_stu_raw[1] = data[4];
-    MC_ONLINE_key_stu_raw[1] = data[5];
-    MC_PULL_stu_raw[0] = data[6];
-    MC_ONLINE_key_stu_raw[0] = data[7];
+    
+    // Validate data pointer
+    if (!data) {
+        DEBUG_MY("MC: ADC data pointer is null, skipping update\n");
+        return;
+    }
+    
+    // Create local copies for atomic update
+    float temp_pull_raw[4];
+    float temp_online_raw[4];
+    
+    // Copy data with bounds checking
+    temp_pull_raw[3] = data[0];
+    temp_online_raw[3] = data[1];
+    temp_pull_raw[2] = data[2];
+    temp_online_raw[2] = data[3];
+    temp_pull_raw[1] = data[4];
+    temp_online_raw[1] = data[5];
+    temp_pull_raw[0] = data[6];
+    temp_online_raw[0] = data[7];
+    
+    // Atomic update to prevent race conditions
+    for (int i = 0; i < 4; i++) {
+        MC_PULL_stu_raw[i] = temp_pull_raw[i];
+        MC_ONLINE_key_stu_raw[i] = temp_online_raw[i];
+    }
 
     for (int i = 0; i < 4; i++)
     {

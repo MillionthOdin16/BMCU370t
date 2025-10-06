@@ -135,6 +135,17 @@ void setup()
 
 void Set_MC_RGB(uint8_t channel, int num, uint8_t R, uint8_t G, uint8_t B)
 {
+    // Input validation: check array bounds
+    if (channel >= 4) {
+        DEBUG_MY("RGB: Invalid channel (max 3), ignoring\n");
+        return;
+    }
+    
+    if (num >= 2) {
+        DEBUG_MY("RGB: Invalid LED number for channel (max 1), ignoring\n");
+        return;
+    }
+
 #if defined(USB_CDC_ENABLED) && (USB_CDC_ENABLED == 1)
     // USB Mode: Channel 0 disabled due to PA11 pin conflict with USB_DM
     if (channel == 0) {
