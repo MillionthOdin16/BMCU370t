@@ -73,3 +73,13 @@ extern void Set_MC_RGB(uint8_t channel, int num, uint8_t R, uint8_t G, uint8_t B
  */
 extern uint8_t channel_colors[4][4];  ///< Channel color storage array [channel][RGBA]
 extern bool MC_STU_ERROR[4];          ///< Channel error status flags
+
+// System health monitoring functions
+extern void system_health_init();
+extern void refresh_watchdog();
+extern void perform_system_health_check();
+
+// Communication health monitoring functions (from BambuBus.cpp)
+extern void update_communication_health();
+extern void get_communication_stats(uint32_t* errors, uint32_t* timeouts, uint32_t* retries, bool* healthy);
+extern void get_rx_stats(uint32_t* rx_errors, uint32_t* crc_errors, uint32_t* length_errors);

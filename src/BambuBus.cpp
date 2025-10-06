@@ -11,6 +11,92 @@ uint16_t BambuBus_address = 0;
 uint8_t BambuBus_AMS_num = 0; // 0-3 represents AMS identification as A, B, C, D
 uint8_t AMS_humidity_wet = DEFAULT_HUMIDITY_WET; // 0~100 (humidity percentage)
 
+// Enhanced communication robustness variables
+uint32_t communication_errors = 0;          ///< Total communication error count
+uint32_t communication_timeouts = 0;        ///< Communication timeout count
+uint32_t communication_retries = 0;         ///< Retry attempt count
+uint64_t last_heartbeat_time = 0;          ///< Last successful heartbeat timestamp
+uint64_t last_communication_time = 0;       ///< Last successful communication timestamp
+bool communication_healthy = true;          ///< Overall communication health status
+uint8_t retry_backoff_ms = COMMUNICATION_RETRY_BACKOFF_MS; ///< Current retry backoff delay
+
+/**
+ * Check communication health and update status
+ */
+void update_communication_health()
+{
+    uint64_t current_time = millis();
+    
+    // Check for communication timeout
+    if ((current_time - last_communication_time) > COMMUNICATION_TIMEOUT_MS) {
+        if (communication_healthy) {
+            DEBUG_MY("Communication timeout detected\n");
+            communication_healthy = false;
+            communication_timeouts++;
+        }
+    }
+    
+    // Check for heartbeat timeout
+    if ((current_time - last_heartbeat_time) > HEARTBEAT_TIMEOUT_MS) {
+        if (communication_healthy) {
+            DEBUG_MY("Heartbeat timeout detected\n");
+            communication_healthy = false;
+        }
+    }
+}
+
+/**
+ * Handle communication error with retry logic
+ */
+bool handle_communication_error()
+{
+    communication_errors++;
+    
+    if (COMMUNICATION_ERROR_RECOVERY_ENABLED) {
+        // Implement exponential backoff for retries
+        delay(retry_backoff_ms);
+        
+        retry_backoff_ms = min(retry_backoff_ms * 2, COMMUNICATION_MAX_BACKOFF_MS);
+        communication_retries++;
+        
+        DEBUG_MY("Communication error, retry ");
+        DEBUG_num("", communication_retries);
+        DEBUG_MY(" with backoff ");
+        DEBUG_num("", retry_backoff_ms);
+        DEBUG_MY("ms\n");
+        
+        return (communication_retries < COMMUNICATION_RETRY_COUNT);
+    }
+    
+    return false;
+}
+
+/**
+ * Reset communication error state on successful operation
+ */
+void reset_communication_error_state()
+{
+    if (!communication_healthy || communication_retries > 0) {
+        communication_healthy = true;
+        communication_retries = 0;
+        retry_backoff_ms = COMMUNICATION_RETRY_BACKOFF_MS;
+        last_communication_time = millis();
+        
+        DEBUG_MY("Communication recovered\n");
+    }
+}
+
+/**
+ * Get communication statistics
+ */
+void get_communication_stats(uint32_t* errors, uint32_t* timeouts, uint32_t* retries, bool* healthy)
+{
+    if (errors) *errors = communication_errors;
+    if (timeouts) *timeouts = communication_timeouts;
+    if (retries) *retries = communication_retries;
+    if (healthy) *healthy = communication_healthy;
+}
+
 /**
  * Filament structure definition
  * Contains all information about a single filament channel
@@ -187,30 +273,52 @@ bool BambuBus_if_on_print()
 }
 uint8_t buf_X[1000];
 CRC8 _RX_IRQ_crcx(0x39, 0x66, 0x00, false, false);
+
+// Enhanced receive state tracking
+static uint64_t last_rx_time = 0;
+static uint32_t rx_error_count = 0;
+static uint32_t crc_error_count = 0;
+static uint32_t length_error_count = 0;
+
 void inline RX_IRQ(unsigned char _RX_IRQ_data)
 {
     static int _index = 0;
     static int length = 999;
     static uint8_t data_length_index;
     static uint8_t data_CRC8_index;
+    static uint64_t packet_start_time = 0;
+    
     unsigned char data = _RX_IRQ_data;
+    uint64_t current_time = millis();
 
-    if (_index == 0) // waitting for first data
+    if (_index == 0) // waiting for first data
     {
         if (data == 0x3D) // 0x3D-start
         {
             BambuBus_data_buf[0] = 0x3D;
             _RX_IRQ_crcx.restart();       // reset CRC8
             _RX_IRQ_crcx.add(0x3D);       // add 0x3D in CRC8
-            data_length_index = 4;        // unknow package type,init length data to 4
-            length = data_CRC8_index = 6; // unknow package length,,init package length to 6
+            data_length_index = 4;        // unknown package type,init length data to 4
+            length = data_CRC8_index = 6; // unknown package length,,init package length to 6
             _index = 1;
+            packet_start_time = current_time;
+            last_rx_time = current_time;
         }
         return;
     }
     else // have 0x3D,normal data
     {
+        // Check for packet timeout
+        if ((current_time - packet_start_time) > 100) { // 100ms packet timeout
+            DEBUG_MY("Packet timeout, resetting\n");
+            _index = 0;
+            rx_error_count++;
+            return;
+        }
+        
         BambuBus_data_buf[_index] = data;
+        last_rx_time = current_time;
+        
         if (_index == 1) // package type byte
         {
             if (data & 0x80) // short head package
@@ -227,6 +335,16 @@ void inline RX_IRQ(unsigned char _RX_IRQ_data)
         if (_index == data_length_index) // the length byte
         {
             length = data;
+            
+            // Validate packet length to prevent buffer overflow
+            if (length > 999 || length < 6) {
+                DEBUG_MY("Invalid packet length: ");
+                DEBUG_num("", length);
+                DEBUG_MY(", resetting\n");
+                _index = 0;
+                length_error_count++;
+                return;
+            }
         }
         if (_index < data_CRC8_index) // before CRC8 byte,add data
         {
@@ -236,7 +354,13 @@ void inline RX_IRQ(unsigned char _RX_IRQ_data)
         {
             if (data != _RX_IRQ_crcx.calc()) // check error,return to waiting 0x3D
             {
+                DEBUG_MY("CRC8 error: expected ");
+                DEBUG_num("", _RX_IRQ_crcx.calc());
+                DEBUG_MY(", got ");
+                DEBUG_num("", data);
+                DEBUG_MY("\n");
                 _index = 0;
+                crc_error_count++;
                 return;
             }
         }
@@ -246,12 +370,31 @@ void inline RX_IRQ(unsigned char _RX_IRQ_data)
             _index = 0;
             memcpy(buf_X, BambuBus_data_buf, length);
             BambuBus_have_data = length;
+            
+            // Reset communication error state on successful packet
+            reset_communication_error_state();
+            
+            DEBUG_MY("Packet received successfully, length: ");
+            DEBUG_num("", length);
+            DEBUG_MY("\n");
         }
         if (_index >= 999) // recv error,reset
         {
+            DEBUG_MY("Buffer overflow, resetting\n");
             _index = 0;
+            rx_error_count++;
         }
     }
+}
+
+/**
+ * Get receive statistics for diagnostics
+ */
+void get_rx_stats(uint32_t* rx_errors, uint32_t* crc_errors, uint32_t* length_errors)
+{
+    if (rx_errors) *rx_errors = rx_error_count;
+    if (crc_errors) *crc_errors = crc_error_count;
+    if (length_errors) *length_errors = length_error_count;
 }
 
 #include <stdio.h>

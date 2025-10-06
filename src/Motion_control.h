@@ -5,6 +5,7 @@
 extern void Motion_control_init();
 extern void Motion_control_set_PWM(uint8_t CHx, int PWM);
 extern void Motion_control_run(int error);
+extern void MC_PULL_ONLINE_read();  // Enhanced sensor reading function
 
 // Automatic direction learning functions
 extern void start_direction_learning(int channel, int commanded_direction);

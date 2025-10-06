@@ -50,11 +50,13 @@ float_t last_total_distance[MAX_FILAMENT_CHANNELS] = {0.0f, 0.0f, 0.0f, 0.0f}; /
 const bool is_two = false; ///< Use dual micro-switches
 
 /**
- * Read ADC values for all channels and update sensor states
+ * Read ADC values for all channels and update sensor states with enhanced robustness
  */
 void MC_PULL_ONLINE_read()
 {
     float *data = ADC_DMA_get_value();
+    bool *adc_health = ADC_DMA_get_health_status();
+    uint32_t *fault_counts = ADC_DMA_get_fault_counts();
     
     // Store previous presence sensor states for edge detection
     for (int i = 0; i < MAX_FILAMENT_CHANNELS; i++) {
@@ -71,78 +73,109 @@ void MC_PULL_ONLINE_read()
     MC_PULL_stu_raw[0] = data[6];
     MC_ONLINE_key_stu_raw[0] = data[7];
 
-    // Process sensor readings for each channel
+    // Process sensor readings for each channel with fault tolerance
     for (int i = 0; i < MAX_FILAMENT_CHANNELS; i++)
     {
-        /*
-        if (i == 0){
-            DEBUG_MY("MC_PULL_stu_raw = ");
-            DEBUG_float(MC_PULL_stu_raw[i],3);
-            DEBUG_MY("  MC_ONLINE_key_stu_raw = ");
-            DEBUG_float(MC_ONLINE_key_stu_raw[i],3);
-            DEBUG_MY("  通道：");
-            DEBUG_float(i,1);
-            DEBUG_MY("   \n");
+        // Check sensor health for pull and presence sensors
+        int pull_adc_index = (3 - i) * 2;      // ADC channel for pull sensor
+        int presence_adc_index = pull_adc_index + 1; // ADC channel for presence sensor
+        
+        bool pull_sensor_healthy = (pull_adc_index < 8) ? adc_health[pull_adc_index] : false;
+        bool presence_sensor_healthy = (presence_adc_index < 8) ? adc_health[presence_adc_index] : false;
+        
+        // Enhanced pressure sensing with hysteresis for noise immunity
+        if (pull_sensor_healthy) {
+            // Use hysteresis to prevent oscillation at thresholds
+            static int MC_PULL_stu_prev[MAX_FILAMENT_CHANNELS] = {0, 0, 0, 0};
+            
+            if (MC_PULL_stu_raw[i] > PULL_voltage_up + 0.05f) { // Add 50mV hysteresis
+                MC_PULL_stu[i] = 1;  // High pressure
+            } else if (MC_PULL_stu_raw[i] < PULL_voltage_down - 0.05f) { // Add 50mV hysteresis  
+                MC_PULL_stu[i] = -1; // Low pressure
+            } else if (MC_PULL_stu_raw[i] > PULL_voltage_up - 0.05f && MC_PULL_stu_prev[i] == 1) {
+                MC_PULL_stu[i] = 1;  // Stay high due to hysteresis
+            } else if (MC_PULL_stu_raw[i] < PULL_voltage_down + 0.05f && MC_PULL_stu_prev[i] == -1) {
+                MC_PULL_stu[i] = -1; // Stay low due to hysteresis
+            } else {
+                MC_PULL_stu[i] = 0;  // Normal range
+            }
+            
+            MC_PULL_stu_prev[i] = MC_PULL_stu[i];
+        } else {
+            // Sensor faulty - maintain previous state or set to safe default
+            DEBUG_MY("Pull sensor channel ");
+            DEBUG_num("", i);
+            DEBUG_MY(" faulty, faults: ");
+            DEBUG_num("", fault_counts[pull_adc_index]);
+            DEBUG_MY("\n");
+            
+            // Set to safe state when sensor is faulty
+            MC_PULL_stu[i] = 0;  // Normal pressure when sensor unavailable
         }
-        */
-        if (MC_PULL_stu_raw[i] > PULL_voltage_up) // 大于1.85V,表示压力过高
-        {
-            MC_PULL_stu[i] = 1;
-        }
-        else if (MC_PULL_stu_raw[i] < PULL_voltage_down) // 小于1.45V，表示压力过低
-        {
-            MC_PULL_stu[i] = -1;
-        }
-        else // 1.4~1.7之间，在正常误差范围内，无需动作
-        {
-            MC_PULL_stu[i] = 0;
-        }
-        /*在线状态*/
 
-        // 耗材在线判断
-        if (is_two == false)
-        {
-            // 大于1.65V，为耗材在线，高电平.
-            if (MC_ONLINE_key_stu_raw[i] > 1.65)
+        // Enhanced presence detection with fault tolerance
+        if (presence_sensor_healthy) {
+            if (is_two == false)
             {
-                MC_ONLINE_key_stu[i] = 1;
+                // Single micro-switch mode with improved thresholds
+                if (MC_ONLINE_key_stu_raw[i] > 1.7f) { // Increased threshold for better noise immunity
+                    MC_ONLINE_key_stu[i] = 1;
+                } else if (MC_ONLINE_key_stu_raw[i] < 1.6f) { // Hysteresis
+                    MC_ONLINE_key_stu[i] = 0;
+                }
+                // Maintain current state if in hysteresis zone
             }
             else
             {
-                MC_ONLINE_key_stu[i] = 0;
+                // Dual micro-switch mode with enhanced logic
+                if (MC_ONLINE_key_stu_raw[i] < 0.5f) { // Lower threshold for better detection
+                    MC_ONLINE_key_stu[i] = 0; // Offline
+                } else if ((MC_ONLINE_key_stu_raw[i] < 1.75f) && (MC_ONLINE_key_stu_raw[i] > 1.35f)) {
+                    MC_ONLINE_key_stu[i] = 2; // Outer switch only - needs assist
+                } else if (MC_ONLINE_key_stu_raw[i] > 1.75f) {
+                    MC_ONLINE_key_stu[i] = 1; // Both switches - fully online
+                } else if (MC_ONLINE_key_stu_raw[i] < 1.35f) {
+                    MC_ONLINE_key_stu[i] = 3; // Inner switch only - needs verification
+                }
             }
-        }
-        else
-        {
-            // DEBUG_MY(MC_ONLINE_key_stu_raw);
-            // 双微动
-            if (MC_ONLINE_key_stu_raw[i] < 0.6f)
-            { // 小于则离线.
-                MC_ONLINE_key_stu[i] = 0;
-            }
-            else if ((MC_ONLINE_key_stu_raw[i] < 1.7f) & (MC_ONLINE_key_stu_raw[i] > 1.4f))
-            { // 仅触发外侧微动，需辅助进料
-                MC_ONLINE_key_stu[i] = 2;
-            }
-            else if (MC_ONLINE_key_stu_raw[i] > 1.7f)
-            { // 双微动同时触发, 在线状态
-                MC_ONLINE_key_stu[i] = 1;
-            }
-            else if (MC_ONLINE_key_stu_raw[i] < 1.4f)
-            { // 仅触发内侧微动 , 需确认是缺料还是抖动.
-                MC_ONLINE_key_stu[i] = 3;
-            }
+        } else {
+            // Presence sensor faulty - use fallback logic
+            DEBUG_MY("Presence sensor channel ");
+            DEBUG_num("", i);
+            DEBUG_MY(" faulty, maintaining previous state\n");
+            
+            // Keep previous state when sensor is faulty to avoid false triggers
+            // This prevents incorrect feeding operations due to sensor failures
         }
         
-        // Detect presence sensor rising edge (filament insertion) and automatically start feeding
+        // Enhanced auto-start feeding with debouncing and validation
+        static uint8_t detection_debounce[MAX_FILAMENT_CHANNELS] = {0, 0, 0, 0};
+        static uint64_t last_detection_time[MAX_FILAMENT_CHANNELS] = {0, 0, 0, 0};
+        uint64_t current_time = millis();
+        
         if (MC_ONLINE_key_stu_prev[i] == 0 && MC_ONLINE_key_stu[i] == 1) {
-            // Filament presence detected for the first time - automatically start feeding
-            if (get_filament_motion(i) == AMS_filament_motion::idle) {
-                DEBUG_MY("Auto-start feeding for channel ");
-                DEBUG_float(i, 0);
-                DEBUG_MY(" - presence detected\n");
-                set_filament_motion(i, AMS_filament_motion::need_send_out);
+            detection_debounce[i]++;
+            
+            // Require multiple consistent detections to reduce false positives
+            if (detection_debounce[i] >= 3 && 
+                (current_time - last_detection_time[i]) > 100) { // 100ms debounce
+                
+                // Only auto-start if sensor is healthy and conditions are right
+                if (presence_sensor_healthy && 
+                    get_filament_motion(i) == AMS_filament_motion::idle) {
+                    
+                    DEBUG_MY("Auto-start feeding for channel ");
+                    DEBUG_float(i, 0);
+                    DEBUG_MY(" - validated presence detected\n");
+                    set_filament_motion(i, AMS_filament_motion::need_send_out);
+                    
+                    last_detection_time[i] = current_time;
+                }
+                detection_debounce[i] = 0;
             }
+        } else if (MC_ONLINE_key_stu[i] == 0) {
+            // Reset debounce counter when filament not present
+            detection_debounce[i] = 0;
         }
     }
 }
@@ -1183,7 +1216,7 @@ void start_direction_learning(int channel, int commanded_direction)
 }
 
 /**
- * Update direction learning with movement data
+ * Enhanced direction learning with improved statistical analysis
  * Called during filament feeding operations
  */
 void update_direction_learning(int channel, float movement_delta)
@@ -1201,109 +1234,106 @@ void update_direction_learning(int channel, float movement_delta)
     uint64_t current_time = get_time64();
     
     // Check for timeout
-    if (current_time - state.learning_start_time > AUTO_DIRECTION_TIMEOUT_MS) {
+    if ((current_time - state.learning_start_time) > (AUTO_DIRECTION_TIMEOUT_MS * 1000ULL)) {
         #if AUTO_DIRECTION_DEBUG_ENABLED
         DEBUG_MY("Direction learning timeout for channel ");
         DEBUG_float(channel, 0);
         DEBUG_MY("\n");
         #endif
-        state.learning_active = false;
+        complete_direction_learning(channel);
         return;
     }
     
-    // Validate movement delta for noise
-    float abs_movement = fabs(movement_delta);
-    if (abs_movement > AUTO_DIRECTION_MAX_NOISE_MM * 10) {
-        // Likely sensor error or mechanical issue
+    // Enforce minimum sample interval to avoid noise
+    if ((current_time - state.last_sample_time) < (AUTO_DIRECTION_SAMPLE_INTERVAL_MS * 1000ULL)) {
+        return;
+    }
+    
+    // Validate movement data quality
+    float abs_movement = fabsf(movement_delta);
+    
+    // Skip samples that are too small (likely noise)
+    if (abs_movement < (AUTO_DIRECTION_MIN_MOVEMENT_MM / AUTO_DIRECTION_MIN_SAMPLES)) {
+        return;
+    }
+    
+    // Check for excessive noise in this sample
+    if (abs_movement > AUTO_DIRECTION_MAX_NOISE_MM) {
         state.error_count++;
-        if (state.error_count > AUTO_DIRECTION_MIN_SAMPLES) {
-            // Too many errors, abort learning
-            state.learning_active = false;
-        }
-        return;
-    }
-    
-    // Mark that we have received some sensor data
-    if (abs_movement > 0.01f) {
-        state.has_valid_data = true;
-    }
-    
-    // Accumulate movement
-    state.total_movement += abs_movement;
-    state.accumulated_noise += (abs_movement < AUTO_DIRECTION_MAX_NOISE_MM) ? abs_movement : AUTO_DIRECTION_MAX_NOISE_MM;
-    
-    // Check if enough time has passed since last sample (prevent rapid sampling)
-    if (current_time - state.last_sample_time < AUTO_DIRECTION_SAMPLE_INTERVAL_MS) {
-        return;
-    }
-    
-    // Check if we have sufficient movement for a sample
-    if (state.total_movement >= AUTO_DIRECTION_MIN_MOVEMENT_MM) {
-        
-        // Validate sample quality based on noise ratio
-        float noise_ratio = state.accumulated_noise / state.total_movement;
-        if (noise_ratio > 0.3f) {
-            // Sample too noisy, reset and try again
-            state.total_movement = 0.0f;
-            state.accumulated_noise = 0.0f;
-            state.error_count++;
-            return;
-        }
-        
-        // Determine actual movement direction from sensor
-        int actual_direction = (movement_delta > 0) ? 1 : -1;
-        
-        // Compare with commanded direction
-        bool directions_match = (state.command_direction == actual_direction);
-        
-        state.sample_count++;
-        state.last_sample_time = current_time;
-        
-        if (directions_match) {
-            state.positive_samples++;
-        } else {
-            state.negative_samples++;
-        }
-        
-        // Calculate confidence score
-        int total_directional_samples = state.positive_samples + state.negative_samples;
-        if (total_directional_samples > 0) {
-            float max_samples = (float)max(state.positive_samples, state.negative_samples);
-            state.confidence_score = max_samples / (float)total_directional_samples;
-        }
+        state.accumulated_noise += abs_movement;
         
         #if AUTO_DIRECTION_DEBUG_ENABLED
-        DEBUG_MY("Channel ");
-        DEBUG_float(channel, 0);
-        DEBUG_MY(" sample ");
-        DEBUG_float(state.sample_count, 0);
-        DEBUG_MY(": movement=");
-        DEBUG_float(movement_delta, 3);
-        DEBUG_MY(" commanded=");
-        DEBUG_float(state.command_direction, 0);
-        DEBUG_MY(" actual=");
-        DEBUG_float(actual_direction, 0);
-        DEBUG_MY(" match=");
-        DEBUG_MY(directions_match ? "Y" : "N");
-        DEBUG_MY(" confidence=");
-        DEBUG_float(state.confidence_score, 3);
-        DEBUG_MY("\n");
+        DEBUG_MY("Noisy sample rejected: ");
+        DEBUG_float(abs_movement, 3);
+        DEBUG_MY("mm\n");
         #endif
         
-        // Reset movement accumulator for next sample
-        state.total_movement = 0.0f;
-        state.accumulated_noise = 0.0f;
-        
-        // Check if we have enough samples and sufficient confidence to make a decision
-        if (state.sample_count >= AUTO_DIRECTION_MIN_SAMPLES && 
-            state.confidence_score >= AUTO_DIRECTION_CONFIDENCE_THRESHOLD) {
+        // Too many noisy samples indicates poor sensor quality
+        if (state.error_count > (AUTO_DIRECTION_MIN_SAMPLES * 2)) {
+            #if AUTO_DIRECTION_DEBUG_ENABLED
+            DEBUG_MY("Too many noisy samples, aborting learning\n");
+            #endif
             complete_direction_learning(channel);
         }
+        return;
+    }
+    
+    // Record valid sample
+    state.has_valid_data = true;
+    state.last_sample_time = current_time;
+    state.total_movement += movement_delta;
+    state.sample_count++;
+    
+    // Determine direction correlation
+    bool positive_correlation = (state.command_direction > 0 && movement_delta > 0) ||
+                               (state.command_direction < 0 && movement_delta < 0);
+    
+    if (positive_correlation) {
+        state.positive_samples++;
+    } else {
+        state.negative_samples++;
+    }
+    
+    // Calculate confidence based on consistency
+    if (state.sample_count > 0) {
+        float positive_ratio = (float)state.positive_samples / state.sample_count;
+        float negative_ratio = (float)state.negative_samples / state.sample_count;
+        state.confidence_score = fmaxf(positive_ratio, negative_ratio);
+    }
+    
+    #if AUTO_DIRECTION_DEBUG_ENABLED
+    DEBUG_MY("Learning sample ");
+    DEBUG_float(state.sample_count, 0);
+    DEBUG_MY(": movement=");
+    DEBUG_float(movement_delta, 3);
+    DEBUG_MY(", confidence=");
+    DEBUG_float(state.confidence_score, 3);
+    DEBUG_MY("\n");
+    #endif
+    
+    // Check if we have enough data for a decision
+    if (state.sample_count >= AUTO_DIRECTION_MIN_SAMPLES) {
+        // Sufficient movement accumulated?
+        if (fabsf(state.total_movement) >= AUTO_DIRECTION_MIN_MOVEMENT_MM) {
+            // High enough confidence?
+            if (state.confidence_score >= AUTO_DIRECTION_CONFIDENCE_THRESHOLD) {
+                complete_direction_learning(channel);
+                return;
+            }
+        }
+    }
+    
+    // Safety limit - don't run learning forever
+    if (state.sample_count >= (AUTO_DIRECTION_MIN_SAMPLES * 5)) {
+        #if AUTO_DIRECTION_DEBUG_ENABLED
+        DEBUG_MY("Direction learning sample limit reached\n");
+        #endif
+        complete_direction_learning(channel);
     }
 }
 
 /**
- * Complete direction learning and save results
+ * Complete direction learning and apply results
  */
 void complete_direction_learning(int channel)
 {
@@ -1313,96 +1343,62 @@ void complete_direction_learning(int channel)
     
     DirectionLearningState& state = direction_learning[channel];
     
-    if (!state.learning_active || state.sample_count < AUTO_DIRECTION_MIN_SAMPLES) {
-        state.learning_active = false;
-        return;
-    }
-    
-    // Validate that we received meaningful sensor data
-    if (!state.has_valid_data) {
-        #if AUTO_DIRECTION_DEBUG_ENABLED
-        DEBUG_MY("Direction learning failed for channel ");
-        DEBUG_float(channel, 0);
-        DEBUG_MY(": no valid sensor data\n");
-        #endif
-        state.learning_active = false;
-        return;
-    }
-    
-    // Require a minimum confidence level
-    if (state.confidence_score < AUTO_DIRECTION_CONFIDENCE_THRESHOLD) {
-        #if AUTO_DIRECTION_DEBUG_ENABLED
-        DEBUG_MY("Direction learning failed for channel ");
-        DEBUG_float(channel, 0);
-        DEBUG_MY(": confidence too low: ");
-        DEBUG_float(state.confidence_score, 3);
-        DEBUG_MY("\n");
-        #endif
-        state.learning_active = false;
-        return;
-    }
-    
-    // Determine learned direction based on sample correlation
-    int learned_direction = 0;
-    if (state.positive_samples > state.negative_samples) {
-        // Commands and actual movement correlate positively
-        learned_direction = 1;
-    } else if (state.negative_samples > state.positive_samples) {
-        // Commands and actual movement are inverted
-        learned_direction = -1;
-    } else {
-        // Inconclusive results
-        #if AUTO_DIRECTION_DEBUG_ENABLED
-        DEBUG_MY("Direction learning inconclusive for channel ");
-        DEBUG_float(channel, 0);
-        DEBUG_MY(": equal pos/neg samples\n");
-        #endif
-        state.learning_active = false;
-        return;
-    }
-    
-    if (learned_direction != 0) {
-        // Successfully learned direction
-        Motion_control_data_save.Motion_control_dir[channel] = learned_direction;
-        Motion_control_data_save.auto_learned[channel] = true;
-        MOTOR_CONTROL[channel].dir = learned_direction;
-        
-        #if AUTO_DIRECTION_DEBUG_ENABLED
-        DEBUG_MY("Direction learning completed for channel ");
-        DEBUG_float(channel, 0);
-        DEBUG_MY(": direction=");
-        DEBUG_float(learned_direction, 0);
-        DEBUG_MY(" confidence=");
-        DEBUG_float(state.confidence_score, 3);
-        DEBUG_MY(" samples=");
-        DEBUG_float(state.sample_count, 0);
-        DEBUG_MY(" pos=");
-        DEBUG_float(state.positive_samples, 0);
-        DEBUG_MY(" neg=");
-        DEBUG_float(state.negative_samples, 0);
-        DEBUG_MY("\n");
-        #else
-        DEBUG_MY("Auto direction learned: CH");
-        DEBUG_float(channel, 0);
-        DEBUG_MY(" dir=");
-        DEBUG_float(learned_direction, 0);
-        DEBUG_MY(" confidence=");
-        DEBUG_float(state.confidence_score, 2);
-        DEBUG_MY("\n");
-        #endif
-        
-        // Save to flash
-        Motion_control_save();
-        
-        state.learning_complete = true;
+    if (!state.learning_active) {
+        return; // Already completed or not started
     }
     
     state.learning_active = false;
+    state.learning_complete = true;
+    
+    #if AUTO_DIRECTION_DEBUG_ENABLED
+    DEBUG_MY("Completing direction learning for channel ");
+    DEBUG_float(channel, 0);
+    DEBUG_MY("\n");
+    #endif
+    
+    // Apply learning results if we have valid data
+    if (state.has_valid_data && state.sample_count >= AUTO_DIRECTION_MIN_SAMPLES) {
+        // Determine the correct direction based on sample analysis
+        int learned_direction = 0;
+        
+        if (state.confidence_score >= AUTO_DIRECTION_CONFIDENCE_THRESHOLD) {
+            // High confidence - use the majority vote
+            if (state.positive_samples > state.negative_samples) {
+                learned_direction = state.command_direction;
+            } else {
+                learned_direction = -state.command_direction;
+            }
+            
+            // Apply the learned direction
+            Motion_control_data_save.Motion_control_dir[channel] = learned_direction;
+            Motion_control_data_save.auto_learned[channel] = true;
+            
+            // Save to flash
+            Motion_control_save();
+            
+            #if AUTO_DIRECTION_DEBUG_ENABLED
+            DEBUG_MY("Direction learned successfully: ");
+            DEBUG_float(learned_direction, 0);
+            DEBUG_MY(" with confidence ");
+            DEBUG_float(state.confidence_score, 3);
+            DEBUG_MY("\n");
+            #endif
+        } else {
+            #if AUTO_DIRECTION_DEBUG_ENABLED
+            DEBUG_MY("Direction learning failed - low confidence: ");
+            DEBUG_float(state.confidence_score, 3);
+            DEBUG_MY("\n");
+            #endif
+        }
+    } else {
+        #if AUTO_DIRECTION_DEBUG_ENABLED
+        DEBUG_MY("Direction learning incomplete - insufficient data\n");
+        #endif
+    }
 }
 
 /**
- * Get direction learning status for diagnostics
- * Returns learning state and progress for a channel
+ * Get current status of direction learning for a channel
  */
 bool get_direction_learning_status(int channel, float* confidence, int* samples, bool* complete)
 {
@@ -1410,7 +1406,7 @@ bool get_direction_learning_status(int channel, float* confidence, int* samples,
         return false;
     }
     
-    const DirectionLearningState& state = direction_learning[channel];
+    DirectionLearningState& state = direction_learning[channel];
     
     if (confidence) *confidence = state.confidence_score;
     if (samples) *samples = state.sample_count;
@@ -1420,8 +1416,7 @@ bool get_direction_learning_status(int channel, float* confidence, int* samples,
 }
 
 /**
- * Reset direction learning state for a specific channel
- * Useful for troubleshooting or when mechanical changes are made
+ * Reset direction learning for a specific channel
  */
 void reset_direction_learning(int channel)
 {
@@ -1429,18 +1424,12 @@ void reset_direction_learning(int channel)
         return;
     }
     
-    // Clear learning state
-    memset(&direction_learning[channel], 0, sizeof(DirectionLearningState));
+    DirectionLearningState& state = direction_learning[channel];
+    memset(&state, 0, sizeof(DirectionLearningState));
     
-    // Reset saved direction to unknown
+    // Reset saved direction data
     Motion_control_data_save.Motion_control_dir[channel] = 0;
     Motion_control_data_save.auto_learned[channel] = false;
-    
-    // Update motor control
-    MOTOR_CONTROL[channel].dir = 1; // Default to positive until learned
-    
-    // Save to flash
-    Motion_control_save();
     
     #if AUTO_DIRECTION_DEBUG_ENABLED
     DEBUG_MY("Direction learning reset for channel ");
@@ -1450,29 +1439,23 @@ void reset_direction_learning(int channel)
 }
 
 /**
- * Reset all learned directions - useful for complete recalibration
+ * Reset all learned directions
  */
 void reset_all_learned_directions()
 {
-    for (int channel = 0; channel < MAX_FILAMENT_CHANNELS; channel++) {
-        // Clear learning state but don't save yet
-        memset(&direction_learning[channel], 0, sizeof(DirectionLearningState));
-        
-        // Reset saved direction to unknown
-        Motion_control_data_save.Motion_control_dir[channel] = 0;
-        Motion_control_data_save.auto_learned[channel] = false;
-        
-        // Update motor control
-        MOTOR_CONTROL[channel].dir = 1; // Default to positive until learned
+    for (int i = 0; i < MAX_FILAMENT_CHANNELS; i++) {
+        reset_direction_learning(i);
     }
     
-    // Save all changes to flash at once
+    // Save to flash
     Motion_control_save();
     
     #if AUTO_DIRECTION_DEBUG_ENABLED
     DEBUG_MY("All direction learning data reset\n");
     #endif
 }
+
+// Existing loading direction detection functions are implemented above
 
 // Convert angle difference, handling wraparound
 int M5600_angle_dis(int16_t angle1, int16_t angle2)
