@@ -44,34 +44,43 @@ AS5600_soft_IIC_many::~AS5600_soft_IIC_many()
 {
     if (numbers > 0)
     {
-        delete IO_SDA;
-        delete IO_SCL;
-        delete port_SDA;
-        delete port_SCL;
-        delete pin_SDA;
-        delete pin_SCL;
-        delete online;
-        delete magnet_stu;
-        delete error;
-        delete raw_angle;
-        delete data;
+        delete[] IO_SDA;
+        delete[] IO_SCL;
+        delete[] port_SDA;
+        delete[] port_SCL;
+        delete[] pin_SDA;
+        delete[] pin_SCL;
+        delete[] online;
+        delete[] magnet_stu;
+        delete[] error;
+        delete[] raw_angle;
+        delete[] data;
     }
 }
 
 void AS5600_soft_IIC_many::init(uint32_t *GPIO_SCL, uint32_t *GPIO_SDA, int num)
 {
+    // Input validation
+    if (GPIO_SCL == nullptr || GPIO_SDA == nullptr || num <= 0 || num > 16) {
+        numbers = 0;
+        return; // Invalid parameters
+    }
+    
     numbers = num;
-    online = (new bool[numbers]);
-    magnet_stu = (new _AS5600_magnet_stu[numbers]);
-    error = (new int[numbers]);
-    raw_angle = (new uint16_t[numbers]);
-    data = (new uint16_t[numbers]);
-    IO_SDA = (new uint32_t[numbers]);
-    IO_SCL = (new uint32_t[numbers]);
-    port_SDA = (new GPIO_TypeDef *[numbers]);
-    port_SCL = (new GPIO_TypeDef *[numbers]);
-    pin_SDA = (new uint16_t[numbers]);
-    pin_SCL = (new uint16_t[numbers]);
+    
+    // Allocate memory - in embedded systems, usually no exception handling
+    online = new bool[numbers];
+    magnet_stu = new _AS5600_magnet_stu[numbers];
+    error = new int[numbers];
+    raw_angle = new uint16_t[numbers];
+    data = new uint16_t[numbers];
+    IO_SDA = new uint32_t[numbers];
+    IO_SCL = new uint32_t[numbers];
+    port_SDA = new GPIO_TypeDef *[numbers];
+    port_SCL = new GPIO_TypeDef *[numbers];
+    pin_SDA = new uint16_t[numbers];
+    pin_SCL = new uint16_t[numbers];
+    
     for (auto i = 0; i < numbers; i++)
     {
         IO_SDA[i] = GPIO_SDA[i];

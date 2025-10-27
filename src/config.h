@@ -19,6 +19,13 @@
 #define LED_PB0_NUM     2    ///< Number of RGB LEDs on channel PB0
 #define LED_PD1_NUM     1    ///< Number of RGB LEDs on main board (PD1)
 
+// Compile-time safety checks for LED configuration
+// Note: Current runtime color storage arrays are hardcoded to support max 2 LEDs per channel
+// If you need more than 2 LEDs per channel, you must also update channel_runs_colors array in main.cpp
+#if LED_PA11_NUM > 8 || LED_PA8_NUM > 8 || LED_PB1_NUM > 8 || LED_PB0_NUM > 8
+#error "LED count per channel cannot exceed 8 - check hardware limits and memory usage"
+#endif
+
 // RGB LED Brightness (0-255)
 #define BRIGHTNESS_MAIN_BOARD   35   ///< Main board LED brightness
 #define BRIGHTNESS_CHANNEL      15   ///< Channel LED brightness
@@ -170,15 +177,15 @@
 
 /**
  * Microsecond delay calculation helper
- * @param time Delay time in microseconds
+ * @param time Delay time in microseconds (must be > 0 and <= 100000)
  */
-#define DELAY_US_DIVISOR(time)  ((uint64_t)(8000000.0 / (time)))
+#define DELAY_US_DIVISOR(time)  ((time) > 0 && (time) <= 100000 ? (uint64_t)(8000000.0 / (time)) : 0)
 
 /**
  * Millisecond delay calculation helper  
- * @param time Delay time in milliseconds
+ * @param time Delay time in milliseconds (must be > 0 and <= 10000)
  */
-#define DELAY_MS_DIVISOR(time)  ((uint64_t)(80000.0 / (time)))
+#define DELAY_MS_DIVISOR(time)  ((time) > 0 && (time) <= 10000 ? (uint64_t)(80000.0 / (time)) : 0)
 
 // =============================================================================
 // Error Codes

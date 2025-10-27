@@ -2,10 +2,15 @@
 #include "CRC16.h"
 #include "CRC8.h"
 #include "config.h"
+
+// Buffer size constants for safety
+#define BAMBUBUS_BUFFER_SIZE 1000
+#define BAMBUBUS_MAX_INDEX 999
+
 CRC16 crc_16;
 CRC8 crc_8;
 
-uint8_t BambuBus_data_buf[1000];
+uint8_t BambuBus_data_buf[BAMBUBUS_BUFFER_SIZE];
 int BambuBus_have_data = 0;
 uint16_t BambuBus_address = 0;
 uint8_t BambuBus_AMS_num = 0; // 0-3 represents AMS identification as A, B, C, D
@@ -86,12 +91,12 @@ uint16_t get_now_BambuBus_device_type()
 
 void reset_filament_meters(int num)
 {
-    if (num < 4)
+    if (num < MAX_FILAMENT_CHANNELS)
         data_save.filament[num].meters = 0;
 }
 void add_filament_meters(int num, float meters)
 {
-    if (num < 4)
+    if (num < MAX_FILAMENT_CHANNELS)
     {
         if ((data_save.filament[num].motion_set == AMS_filament_motion::on_use) || (data_save.filament[num].motion_set == AMS_filament_motion::need_pull_back))
             data_save.filament[num].meters += meters;
@@ -99,14 +104,14 @@ void add_filament_meters(int num, float meters)
 }
 float get_filament_meters(int num)
 {
-    if (num < 4)
+    if (num < MAX_FILAMENT_CHANNELS)
         return data_save.filament[num].meters;
     else
         return 0;
 }
 void set_filament_online(int num, bool if_online)
 {
-    if (num < 4)
+    if (num < MAX_FILAMENT_CHANNELS)
     {
         if (if_online)
         {
@@ -125,7 +130,7 @@ void set_filament_online(int num, bool if_online)
 
 bool get_filament_online(int num)
 {
-    if (num < 4)
+    if (num < MAX_FILAMENT_CHANNELS)
     {
         if (data_save.filament[num].statu == AMS_filament_stu::offline)
         {
@@ -143,7 +148,7 @@ bool get_filament_online(int num)
 }
 void set_filament_motion(int num, AMS_filament_motion motion)
 {
-    if (num < 4)
+    if (num < MAX_FILAMENT_CHANNELS)
     {
         _filament *filament = &(data_save.filament[num]);
         filament->motion_set = motion;
@@ -168,7 +173,7 @@ void set_filament_motion(int num, AMS_filament_motion motion)
 }
 AMS_filament_motion get_filament_motion(int num)
 {
-    if (num < 4)
+    if (num < MAX_FILAMENT_CHANNELS)
         return data_save.filament[num].motion_set;
     else
         return AMS_filament_motion::idle;
@@ -176,7 +181,7 @@ AMS_filament_motion get_filament_motion(int num)
 bool BambuBus_if_on_print()
 {
     bool on_print = false;
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < MAX_FILAMENT_CHANNELS; i++)
     {
         if (data_save.filament[i].motion_set != AMS_filament_motion::idle)
         {
@@ -185,12 +190,12 @@ bool BambuBus_if_on_print()
     }
     return on_print;
 }
-uint8_t buf_X[1000];
+uint8_t buf_X[BAMBUBUS_BUFFER_SIZE];
 CRC8 _RX_IRQ_crcx(0x39, 0x66, 0x00, false, false);
 void inline RX_IRQ(unsigned char _RX_IRQ_data)
 {
     static int _index = 0;
-    static int length = 999;
+    static int length = BAMBUBUS_MAX_INDEX;
     static uint8_t data_length_index;
     static uint8_t data_CRC8_index;
     unsigned char data = _RX_IRQ_data;
@@ -210,6 +215,12 @@ void inline RX_IRQ(unsigned char _RX_IRQ_data)
     }
     else // have 0x3D,normal data
     {
+        // Critical fix: Check bounds before writing to buffer
+        if (_index >= BAMBUBUS_BUFFER_SIZE) {
+            _index = 0; // Reset on overflow
+            return;
+        }
+        
         BambuBus_data_buf[_index] = data;
         if (_index == 1) // package type byte
         {
@@ -244,10 +255,12 @@ void inline RX_IRQ(unsigned char _RX_IRQ_data)
         if (_index >= length) // recv over,copy package data
         {
             _index = 0;
-            memcpy(buf_X, BambuBus_data_buf, length);
-            BambuBus_have_data = length;
+            // Ensure we don't copy more than buffer size
+            uint16_t copy_length = (length <= BAMBUBUS_BUFFER_SIZE) ? length : BAMBUBUS_BUFFER_SIZE;
+            memcpy(buf_X, BambuBus_data_buf, copy_length);
+            BambuBus_have_data = copy_length;
         }
-        if (_index >= 999) // recv error,reset
+        if (_index >= BAMBUBUS_MAX_INDEX) // recv error,reset
         {
             _index = 0;
         }
@@ -348,7 +361,7 @@ void BambuBus_init()
 
     if (_init_ready)
     {
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < MAX_FILAMENT_CHANNELS; i++)
         {
             channel_colors[i][0] = data_save.filament[i].color_R;
             channel_colors[i][1] = data_save.filament[i].color_G;
@@ -542,7 +555,7 @@ uint8_t package_num = 0;
 uint8_t get_filament_left_char()
 {
     uint8_t data = 0;
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < MAX_FILAMENT_CHANNELS; i++)
     {
         if (data_save.filament[i].statu == AMS_filament_stu::online)
         {
@@ -561,7 +574,7 @@ void set_motion_res_datas(unsigned char *set_buf, unsigned char read_num)
 {
     float meters = 0;
     uint16_t pressure = 0xFFFF;
-    if ((read_num != 0xFF) && (read_num < 4))
+    if ((read_num != 0xFF) && (read_num < MAX_FILAMENT_CHANNELS))
     {
         meters = data_save.filament[read_num].meters;
         if (BambuBus_address == BambuBus_AMS_lite)
@@ -586,13 +599,13 @@ bool set_motion(unsigned char read_num, unsigned char statu_flags, unsigned char
     time_last = time_now;
     if (BambuBus_address == BambuBus_AMS) // AMS08
     {
-        if (read_num < 4)
+        if (read_num < MAX_FILAMENT_CHANNELS)
         {
             if ((statu_flags == 0x03) && (fliment_motion_flag == 0x00)) // 03 00
             {
                 if (data_save.BambuBus_now_filament_num != read_num) // on change
                 {
-                    if (data_save.BambuBus_now_filament_num < 4)
+                    if (data_save.BambuBus_now_filament_num < MAX_FILAMENT_CHANNELS)
                     {
                         data_save.filament[data_save.BambuBus_now_filament_num].motion_set = AMS_filament_motion::idle;
                         data_save.filament_use_flag = 0x00;
@@ -631,7 +644,7 @@ bool set_motion(unsigned char read_num, unsigned char statu_flags, unsigned char
             if ((statu_flags == 0x03) && (fliment_motion_flag == 0x00)) // 03 00(FF)
             {
                 _filament *filament = &(data_save.filament[data_save.BambuBus_now_filament_num]);
-                if (data_save.BambuBus_now_filament_num < 4)
+                if (data_save.BambuBus_now_filament_num < MAX_FILAMENT_CHANNELS)
                 {
                     if (filament->motion_set == AMS_filament_motion::on_use)
                     {
@@ -643,7 +656,7 @@ bool set_motion(unsigned char read_num, unsigned char statu_flags, unsigned char
             }
             else
             {
-                for (auto i = 0; i < 4; i++)
+                for (auto i = 0; i < MAX_FILAMENT_CHANNELS; i++)
                 {
                     data_save.filament[i].motion_set = AMS_filament_motion::idle;
                     data_save.filament[i].pressure = 0xFFFF;
@@ -653,7 +666,7 @@ bool set_motion(unsigned char read_num, unsigned char statu_flags, unsigned char
     }
     else if (BambuBus_address == BambuBus_AMS_lite) // AMS lite
     {
-        if (read_num < 4)
+        if (read_num < MAX_FILAMENT_CHANNELS)
         {
             if ((statu_flags == 0x03) && (fliment_motion_flag == 0x3F)) // 03 3F
             {
@@ -665,7 +678,7 @@ bool set_motion(unsigned char read_num, unsigned char statu_flags, unsigned char
                 data_save.BambuBus_now_filament_num = read_num;
                 if (data_save.filament[read_num].motion_set != AMS_filament_motion::need_send_out)
                 {
-                    for (int i = 0; i < 4; i++)
+                    for (int i = 0; i < MAX_FILAMENT_CHANNELS; i++)
                     {
                         data_save.filament[i].motion_set = AMS_filament_motion::idle;
                     }
@@ -714,7 +727,7 @@ bool set_motion(unsigned char read_num, unsigned char statu_flags, unsigned char
             AMS_filament_motion motion = data_save.filament[data_save.BambuBus_now_filament_num].motion_set;
             if (motion != AMS_filament_motion::on_use)
             {
-                for (int i = 0; i < 4; i++)
+                for (int i = 0; i < MAX_FILAMENT_CHANNELS; i++)
                 {
                     data_save.filament[i].motion_set = AMS_filament_motion::idle;
                 }
@@ -724,7 +737,7 @@ bool set_motion(unsigned char read_num, unsigned char statu_flags, unsigned char
     }
     else if (BambuBus_address == BambuBus_none) // none
     {
-        /*if ((read_num != 0xFF) && (read_num < 4))
+        /*if ((read_num != 0xFF) && (read_num < MAX_FILAMENT_CHANNELS))
         {
             if ((statu_flags == 0x07) && (fliment_motion_flag == 0x00)) // 07 00
             {
@@ -830,7 +843,7 @@ void send_for_motion_long(unsigned char *buf, int length)
     unsigned char read_num = buf[9];
     if (AMS_num != BambuBus_AMS_num)
         return;
-    for (auto i = 0; i < 4; i++)
+    for (auto i = 0; i < MAX_FILAMENT_CHANNELS; i++)
     {
         // filament[i].meters;
         if (data_save.filament[i].statu == AMS_filament_stu::online)
@@ -904,7 +917,7 @@ void send_for_REQx6(unsigned char *buf, int length)
     /*
         unsigned char filament_flag_on = 0x00;
         unsigned char filament_flag_NFC = 0x00;
-        for (auto i = 0; i < 4; i++)
+        for (auto i = 0; i < MAX_FILAMENT_CHANNELS; i++)
         {
             if (data_save.filament[i].statu == online)
             {

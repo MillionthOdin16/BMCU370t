@@ -545,7 +545,7 @@ void AS5600_distance_updata()//读取as5600，更新相关的数据
     } while (time_now <= time_last); // T!=0
     T = (float)(time_now - time_last);
     MC_AS5600.updata_angle();
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < MAX_FILAMENT_CHANNELS; i++)
     {
         if ((MC_AS5600.online[i] == false))
         {
@@ -597,7 +597,7 @@ bool wait = false;
 bool Prepare_For_filament_Pull_Back(float_t OUT_filament_meters)
 {
     bool wait = false;
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < MAX_FILAMENT_CHANNELS; i++)
     {
         if (filament_now_position[i] == filament_pulling_back)
         {
@@ -632,7 +632,7 @@ void motor_motion_switch() // 通道状态切换函数，只控制当前在使�
 {
     int num = get_now_filament_num();                      // 当前通道号
     uint16_t device_type = get_now_BambuBus_device_type(); // 设备类型
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < MAX_FILAMENT_CHANNELS; i++)
     {
         if (i != num)
         {
@@ -701,7 +701,7 @@ void motor_motion_switch() // 通道状态切换函数，只控制当前在使�
             case AMS_filament_motion::idle:
                 filament_now_position[num] = filament_idle;
                 MOTOR_CONTROL[num].set_motion(filament_motion_enum::filament_motion_pressure_ctrl_idle, 100);
-                for (int i = 0; i < 4; i++)
+                for (int i = 0; i < MAX_FILAMENT_CHANNELS; i++)
                 {
                     // 硬件正常
                     if (MC_ONLINE_key_stu[i] == 1 || MC_ONLINE_key_stu[i] == 0)
@@ -753,11 +753,11 @@ void motor_motion_run(int error)
     }
     else // error模式
     {
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < MAX_FILAMENT_CHANNELS; i++)
             MOTOR_CONTROL[i].set_motion(filament_motion_enum::filament_motion_stop, 100); // 关闭电机
     }
 
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < MAX_FILAMENT_CHANNELS; i++)
     {
         /*if (!get_filament_online(i)) // 通道不在线则电机不允许工作
             MOTOR_CONTROL[i].set_motion(filament_motion_stop, 100);*/
@@ -802,7 +802,7 @@ void Motion_control_run(int error)
     MC_PULL_ONLINE_read();
 
     AS5600_distance_updata();
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < MAX_FILAMENT_CHANNELS; i++)
     {
         if (MC_ONLINE_key_stu[i] == 0) {
             set_filament_online(i, false);
@@ -826,7 +826,7 @@ void Motion_control_run(int error)
 
     if (error) // Error != 0
     {
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < MAX_FILAMENT_CHANNELS; i++)
         {
             set_filament_online(i, false);
             // filament_channel_inserted[i] = true; // 用于测试
@@ -848,7 +848,7 @@ void Motion_control_run(int error)
         }
     } else { // 正常连接到打印机
         // 在这里设置颜色会重复修改。
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < MAX_FILAMENT_CHANNELS; i++)
         {
             if ((MC_AS5600.online[i] == false) || (MC_AS5600.magnet_stu[i] == -1)) // AS5600 error
             {
@@ -924,14 +924,14 @@ void MOTOR_get_pwm_zero()
     MC_AS5600.updata_angle();
 
     int16_t last_angle[4];
-    for (int index = 0; index < 4; index++)
+    for (int index = 0; index < MAX_FILAMENT_CHANNELS; index++)
     {
         last_angle[index] = MC_AS5600.raw_angle[index];
     }
     for (int pwm = 300; pwm < 1000; pwm += 10)
     {
         MC_AS5600.updata_angle();
-        for (int index = 0; index < 4; index++)
+        for (int index = 0; index < MAX_FILAMENT_CHANNELS; index++)
         {
 
             if (pwm_zero[index] == 0)
@@ -954,7 +954,7 @@ void MOTOR_get_pwm_zero()
         }
         delay(100);
     }
-    for (int index = 0; index < 4; index++)
+    for (int index = 0; index < MAX_FILAMENT_CHANNELS; index++)
     {
         Motion_control_set_PWM(index, 0);
         MOTOR_CONTROL[index].set_pwm_zero(pwm_zero[index]);
@@ -1497,7 +1497,7 @@ void MOTOR_get_dir()
     bool have_data = Motion_control_read();
     if (!have_data)
     {
-        for (int index = 0; index < 4; index++)
+        for (int index = 0; index < MAX_FILAMENT_CHANNELS; index++)
         {
             Motion_control_data_save.Motion_control_dir[index] = 0;
             Motion_control_data_save.auto_learned[index] = false;
@@ -1506,7 +1506,7 @@ void MOTOR_get_dir()
     
     #if AUTO_DIRECTION_LEARNING_ENABLED
     // Initialize direction learning states
-    for (int index = 0; index < 4; index++)
+    for (int index = 0; index < MAX_FILAMENT_CHANNELS; index++)
     {
         memset(&direction_learning[index], 0, sizeof(DirectionLearningState)); // Properly initialize to zero
         memset(&loading_detection[index], 0, sizeof(LoadingDirectionState)); // Initialize loading detection
@@ -1516,7 +1516,7 @@ void MOTOR_get_dir()
     MC_AS5600.updata_angle(); //读取5600的初始角度值
 
     int16_t last_angle[4];
-    for (int index = 0; index < 4; index++)
+    for (int index = 0; index < MAX_FILAMENT_CHANNELS; index++)
     {
         last_angle[index] = MC_AS5600.raw_angle[index];                  //将初始角度值记录下来
         dir[index] = Motion_control_data_save.Motion_control_dir[index]; //记录flash中的dir数据
@@ -1525,7 +1525,7 @@ void MOTOR_get_dir()
     // If automatic learning is enabled, skip startup calibration for channels that don't have learned directions
     bool need_startup_calibration = false;
     if (AUTO_DIRECTION_LEARNING_ENABLED) {
-        for (int index = 0; index < 4; index++) {
+        for (int index = 0; index < MAX_FILAMENT_CHANNELS; index++) {
             if ((MC_AS5600.online[index] == true) && 
                 (Motion_control_data_save.Motion_control_dir[index] == 0 || 
                  !Motion_control_data_save.auto_learned[index])) {
@@ -1542,7 +1542,7 @@ void MOTOR_get_dir()
     bool need_save = false; // 是否需要更新状态
     
     if (need_startup_calibration) {
-        for (int index = 0; index < 4; index++)
+        for (int index = 0; index < MAX_FILAMENT_CHANNELS; index++)
         {
             if ((MC_AS5600.online[index] == true)) // 有5600，说明通道在线
             {
@@ -1569,14 +1569,14 @@ void MOTOR_get_dir()
 
             if (i++ > 200) // 超过2s无响应
             {
-                for (int index = 0; index < 4; index++)
+                for (int index = 0; index < MAX_FILAMENT_CHANNELS; index++)
                 {
                     Motion_control_set_PWM(index, 0);                       // 停止
                     Motion_control_data_save.Motion_control_dir[index] = 0; // 方向设为0
                 }
                 break; // 跳出循环
             }
-            for (int index = 0; index < 4; index++) // 遍历
+            for (int index = 0; index < MAX_FILAMENT_CHANNELS; index++) // 遍历
             {
                 if ((MC_AS5600.online[index] == true) && (Motion_control_data_save.Motion_control_dir[index] == 0)) // 对于新的通道
                 {
@@ -1609,7 +1609,7 @@ void MOTOR_get_dir()
             MOTOR_DIR_CORRECTION_CH3   // Channel 3 (sometimes reversed)
         };
         
-        for (int index = 0; index < 4; index++) // 遍历四个电机
+        for (int index = 0; index < MAX_FILAMENT_CHANNELS; index++) // 遍历四个电机
         {
             // Apply direction correction if needed for this channel
             if (motor_dir_correction[index] && dir[index] != 0) {
@@ -1661,7 +1661,7 @@ void MOTOR_init()
         
         first_boot = 0;
     }
-    for (int index = 0; index < 4; index++)
+    for (int index = 0; index < MAX_FILAMENT_CHANNELS; index++)
     {
         Motion_control_set_PWM(index, 0);
         MOTOR_CONTROL[index].set_pwm_zero(500);
@@ -1692,7 +1692,7 @@ void MOTOR_init()
     Motion_control_save();
     
     // Validate that all motor directions are properly set (never zero)
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < MAX_FILAMENT_CHANNELS; i++)
     {
         if (MOTOR_CONTROL[i].dir == 0) {
             // This should never happen after our fix, but add safety check
@@ -1702,7 +1702,7 @@ void MOTOR_init()
     }
     
     MC_AS5600.updata_angle();
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < MAX_FILAMENT_CHANNELS; i++)
     {
         as5600_distance_save[i] = MC_AS5600.raw_angle[i];
     }
@@ -1721,7 +1721,7 @@ void Motion_control_init() // 初始化所有运动和传感器
         delay(10);
         MC_PULL_ONLINE_read();
 
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < MAX_FILAMENT_CHANNELS; i++)
         {
             MOTOR_CONTROL[i].set_motion(filament_motion_pressure_ctrl_on_use, 100);
             if (!get_filament_online(i)) // 通道不在线则电机不允许工作
@@ -1733,7 +1733,7 @@ void Motion_control_init() // 初始化所有运动和传感器
         DEBUG_num(s, n);
     }*/
 
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < MAX_FILAMENT_CHANNELS; i++)
     {
         // if(MC_AS5600.online[i])//用AS5600是否有信号来判断通道是否插入
         // {

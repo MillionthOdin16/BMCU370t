@@ -111,7 +111,9 @@ void Set_MC_RGB(uint8_t channel, int num, uint8_t R, uint8_t G, uint8_t B)
         return;
     }
     
-    if (num < 0 || num >= 2) { // Each channel has max 2 LEDs (status and pull-online)
+    // Check LED count per channel based on configuration
+    uint8_t led_counts[] = {LED_PA11_NUM, LED_PA8_NUM, LED_PB1_NUM, LED_PB0_NUM};
+    if (num < 0 || num >= led_counts[channel]) {
         DEBUG_MY("ERROR: Invalid LED num in Set_MC_RGB\n");
         return;
     }
@@ -120,11 +122,17 @@ void Set_MC_RGB(uint8_t channel, int num, uint8_t R, uint8_t G, uint8_t B)
     bool is_new_colors = false;
 
     // Check if any color component has changed
-    for (int colors = 0; colors < 3; colors++) {
-        if (channel_runs_colors[channel][num][colors] != set_colors[colors]) {
-            channel_runs_colors[channel][num][colors] = set_colors[colors]; // Record new color
-            is_new_colors = true; // Color has been updated
+    // Safety check: ensure we don't exceed runtime color storage array bounds
+    if (num < 2) { // Runtime color storage is currently hardcoded to [4][2][3]
+        for (int colors = 0; colors < 3; colors++) {
+            if (channel_runs_colors[channel][num][colors] != set_colors[colors]) {
+                channel_runs_colors[channel][num][colors] = set_colors[colors]; // Record new color
+                is_new_colors = true; // Color has been updated
+            }
         }
+    } else {
+        // For LED indices beyond 2, we still need to update the LED but skip color tracking
+        is_new_colors = true;
     }
     
     // Update LED only if color has changed (reduces unnecessary updates)
@@ -150,7 +158,7 @@ void Show_SYS_RGB(int BambuBUS_status)
         strip_PD1.show();
     }
     // Update error channels, light up red LEDs
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < MAX_FILAMENT_CHANNELS; i++)
     {
         if (MC_STU_ERROR[i])
         {

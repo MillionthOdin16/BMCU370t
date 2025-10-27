@@ -89,6 +89,10 @@ float *ADC_DMA_get_value()
         int data_sum = 0;
         for (int j = 0; j < ADC_filter_n; j++)
         {
+            // Bounds check for array access safety
+            if (j >= ADC_filter_n || i >= 8) {
+                continue; // Skip invalid indices
+            }
             uint16_t val = ADC_data[j][i]; // 第j次的i通道上的数据
             int sum = val + ADC_Calibrattion_Val;
             if (sum < 0 || val == 0)

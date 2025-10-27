@@ -33,10 +33,24 @@ u32 buf[Fsize];
  */
 bool Flash_saves(void *buf, uint32_t length, uint32_t address)
 {
+    // Input validation
+    if (buf == NULL || length == 0) {
+        return false;
+    }
+    
+    // Check for overflow and bounds
+    if (address < 0x08000000 || address >= 0x08010000) { // Valid flash range check
+        return false;
+    }
+    
     uint32_t end_address = address + length;
+    if (end_address <= address || end_address > 0x08010000) { // Overflow or bounds check
+        return false;
+    }
+    
     uint32_t erase_counter = 0;
     uint32_t address_i = 0;
-    uint32_t page_num = length / FLASH_PAGE_SIZE;
+    uint32_t page_num = (length + FLASH_PAGE_SIZE - 1) / FLASH_PAGE_SIZE; // Round up division
     uint16_t *data_ptr = (uint16_t *)buf;
 
     __disable_irq(); // 禁用中断
@@ -62,22 +76,7 @@ bool Flash_saves(void *buf, uint32_t length, uint32_t address)
 
     FLASH_Lock();
     __enable_irq();
-    /*
-        address_i = address;
-        data_ptr=(uint16_t *)buf;
-        while ((address_i < end_address) && (MemoryProgramStatus != FAILED))
-        {
-            if ((*(__IO uint16_t *)address_i) != *data_ptr)
-            {
-                MemoryProgramStatus = FAILED;
-            }
-            address_i += 2;
-            data_ptr++;
-        }
-
-        if (MemoryProgramStatus == FAILED)
-            return false;
-        else
-            return true;*/
-    return true;
+    
+    // Return success only if all operations completed successfully
+    return (FLASHStatus == FLASH_COMPLETE);
 }
