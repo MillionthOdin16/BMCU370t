@@ -45,6 +45,18 @@ bool WebServerManager::init(BMCU370_Interface* interface, HistoricalDataManager*
         setupFallbackInterface();
     }
     
+    // Register OTA progress callback
+    ota_manager.onProgress([this](int progress) {
+        if (websocket.count() > 0) {
+            JsonDocument doc;
+            doc["type"] = "ota_progress";
+            doc["progress"] = progress;
+            String response;
+            serializeJson(doc, response);
+            websocket.textAll(response);
+        }
+    });
+
     // Start server
     server.begin();
     
@@ -87,22 +99,21 @@ void WebServerManager::handle() {
 
             WiFi.scanDelete();
             wifi_scan_requested = false;
+        } else if (millis() - wifi_scan_start_time > WIFI_SCAN_TIMEOUT_MS) {
+            ESP_LOGE(TAG, "WiFi scan timed out");
+            WiFi.scanDelete(); // Abort scan
+            wifi_scan_requested = false;
+
+            JsonDocument doc;
+            doc["type"] = "wifi_scan_result";
+            doc["error"] = "Scan timed out";
+            doc["networks"] = JsonArray();
+            String response;
+            serializeJson(doc, response);
+            websocket.textAll(response);
         }
-        // if scan is still running, do nothing and wait for next handle() call
     }
 
-    // Broadcast OTA progress
-    if (ota_manager.isActive()) {
-        JsonDocument doc;
-        doc["type"] = "ota_progress";
-        doc["progress"] = ota_manager.getProgress();
-        doc["state"] = (int)ota_manager.getState();
-        doc["error"] = ota_manager.getLastError();
-
-        String response;
-        serializeJson(doc, response);
-        websocket.textAll(response);
-    }
 
     // Cleanup closed WebSocket connections
     websocket.cleanupClients();
@@ -810,6 +821,24 @@ void WebServerManager::handleSystemControl(AsyncWebServerRequest* request) {
     
     String action = request->getParam("action", true)->value();
     
+    // Input validation for action parameter
+    if (action.length() == 0 || action.length() > 50) {
+        error_count++;
+        request->send(400, "application/json", "{\"error\":\"Invalid action parameter length\"}");
+        return;
+    }
+    
+    // Sanitize action - only allow alphanumeric and underscore
+    for (int i = 0; i < action.length(); i++) {
+        char c = action[i];
+        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || 
+              (c >= '0' && c <= '9') || c == '_')) {
+            error_count++;
+            request->send(400, "application/json", "{\"error\":\"Invalid characters in action parameter\"}");
+            return;
+        }
+    }
+    
     if (action == "reset_bmcu370") {
         if (bmcu_interface && bmcu_interface->isConnected()) {
             bool success = bmcu_interface->resetDevice();
@@ -838,7 +867,7 @@ void WebServerManager::handleSystemControl(AsyncWebServerRequest* request) {
         ESP.restart();
     } else {
         error_count++;
-        request->send(400, "application/json", "{\"error\":\"Unknown action\"}");
+        request->send(400, "application/json", "{\"error\":\"Unknown action: only reset_bmcu370, dfu_mode, and reset_esp32 are supported\"}");
     }
     
     api_request_count++;
@@ -871,6 +900,28 @@ void WebServerManager::handleWiFiConnect(AsyncWebServerRequest* request) {
     
     String ssid = request->getParam("ssid", true)->value();
     String password = request->getParam("password", true)->value();
+    
+    // Input validation
+    if (ssid.length() == 0 || ssid.length() > 32) {
+        error_count++;
+        request->send(400, "application/json", "{\"error\":\"Invalid SSID length (1-32 characters required)\"}");
+        return;
+    }
+    
+    if (password.length() > 63) {
+        error_count++;
+        request->send(400, "application/json", "{\"error\":\"Password too long (maximum 63 characters)\"}");
+        return;
+    }
+    
+    // Sanitize input - remove any control characters
+    for (int i = 0; i < ssid.length(); i++) {
+        if (ssid[i] < 32 || ssid[i] == 127) {
+            error_count++;
+            request->send(400, "application/json", "{\"error\":\"Invalid characters in SSID\"}");
+            return;
+        }
+    }
     
     ESP_LOGI(TAG, "WiFi connection request for SSID: %s", ssid.c_str());
     
@@ -975,10 +1026,11 @@ void WebServerManager::handleWebSocketEvent(AsyncWebSocket* server, AsyncWebSock
                     }
                 } else if (command == "start_wifi_scan") {
                     ESP_LOGI(TAG, "WiFi scan requested via WebSocket");
-                    if (WiFi.scanComplete() == WIFI_SCAN_RUNNING) {
+                    if (wifi_scan_requested) {
                         sendErrorToClient(client, "Scan already in progress");
                     } else {
                         wifi_scan_requested = true;
+                        wifi_scan_start_time = millis();
                         WiFi.scanNetworks(true, false, false, 300);
                     }
                 } else {

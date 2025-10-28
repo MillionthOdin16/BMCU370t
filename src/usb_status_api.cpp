@@ -245,6 +245,13 @@ int usb_get_full_status(char* buffer, size_t buffer_size) {
             filament_online ? "true" : "false",
             MC_STU_ERROR[i] ? "true" : "false"
         );
+        
+        // Check for buffer overflow after each channel
+        if (pos >= (int)buffer_size - 100) {
+            // Not enough space for remaining channels and closing brackets
+            pos += snprintf(buffer + pos, buffer_size - pos, "]}");
+            return pos;
+        }
     }
     
     // Close JSON

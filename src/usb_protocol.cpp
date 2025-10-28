@@ -26,146 +26,6 @@ static bool auto_status_enabled = false;
 static uint32_t auto_status_interval = 5000; // 5 seconds default
 static uint32_t last_auto_status_time = 0;
 
-// USB CDC-ACM Implementation with DFU preservation
-#ifdef USB_CDC_ENABLED
-
-// USB device mode detection
-typedef enum {
-    USB_MODE_NONE = 0,
-    USB_MODE_DFU,
-    USB_MODE_CDC
-} usb_mode_t;
-
-static usb_mode_t current_usb_mode = USB_MODE_NONE;
-static bool usb_cdc_connected = false;
-static bool usb_enumerated = false;
-
-// Check if system should start in DFU mode (preserve firmware update capability)
-static bool should_enter_dfu_mode(void) {
-#ifdef USB_DFU_DUAL_MODE
-    // Check boot pin or magic value to determine DFU mode
-    // On CH32V203, BOOT0 pin or reset with specific pattern can indicate DFU
-    
-    // Check if BOOT0 pin is high (DFU mode request)
-    GPIO_InitTypeDef GPIO_InitStructure = {0};
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE);
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_2; // PB2 commonly used for BOOT0
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU; // Input with pull-up
-    GPIO_Init(GPIOB, &GPIO_InitStructure);
-    
-    bool boot_pin_high = (GPIO_ReadInputDataBit(GPIOB, GPIO_Pin_2) == Bit_SET);
-    
-    // Also check for magic value in backup register indicating DFU request
-    RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR, ENABLE);
-    PWR_BackupAccessCmd(ENABLE);
-    uint16_t magic_value = BKP_ReadBackupRegister(BKP_DR1);
-    bool dfu_magic_set = (magic_value == 0xDF00); // DFU magic value
-    
-    // Clear magic value if set
-    if (dfu_magic_set) {
-        BKP_WriteBackupRegister(BKP_DR1, 0x0000);
-    }
-    
-    return (boot_pin_high || dfu_magic_set);
-#else
-    return false; // Always use CDC mode if dual mode disabled
-#endif
-}
-
-// Initialize USB subsystem in appropriate mode
-static void usb_hardware_init(void) {
-    // CRITICAL: PIN CONFLICT RESOLUTION
-    // PA11 is shared between USB_DM and Channel 0 RGB LEDs
-    // This initialization takes control of PA11/PA12 for USB communication
-    // Channel 0 RGB functionality is disabled when USB is active
-    DEBUG_MY("USB: Initializing - PA11 will be used for USB_DM (Channel 0 LEDs disabled)\n");
-    
-    // Determine mode
-    if (should_enter_dfu_mode()) {
-        current_usb_mode = USB_MODE_DFU;
-        // Enable DFU mode - system will enter bootloader
-        DEBUG_MY("USB: DFU mode requested - entering bootloader\n");
-        // Force system reset to bootloader
-        // This preserves firmware update capability
-        NVIC_SystemReset();
-    } else {
-        current_usb_mode = USB_MODE_CDC;
-        // Initialize CDC-ACM mode with real hardware
-        DEBUG_MY("USB: CDC mode - initializing communication\n");
-        DEBUG_MY("USB: Channel 0 RGB LEDs unavailable due to PA11 pin sharing\n");
-        
-        // Initialize real USB CDC hardware
-        usb_cdc_init();
-        usb_enumerated = false;
-        usb_cdc_connected = false;
-    }
-}
-
-// Check USB CDC connection status
-static bool usb_cdc_check_connection(void) {
-    if (current_usb_mode != USB_MODE_CDC) {
-        return false;
-    }
-    
-    // Use real USB CDC connection status
-    bool connected = usb_cdc_check_connection();
-    
-    // Update internal state
-    if (connected && !usb_cdc_connected) {
-        usb_cdc_connected = true;
-        usb_enumerated = true;
-        DEBUG_MY("USB CDC: Device enumerated and connected\n");
-    } else if (!connected && usb_cdc_connected) {
-        usb_cdc_connected = false;
-        usb_enumerated = false;
-        DEBUG_MY("USB CDC: Device disconnected\n");
-    }
-    
-    return connected;
-}
-
-// Read data from USB CDC
-static int usb_cdc_read_data(char* buffer, int max_length) {
-    if (!usb_cdc_check_connection() || !buffer || max_length <= 0) {
-        return 0;
-    }
-    
-    // Use real USB CDC hardware to read data
-    return usb_cdc_receive_data((uint8_t*)buffer, max_length);
-}
-
-// Write data to USB CDC
-static bool usb_cdc_write(const char* data, int length) {
-    if (!usb_cdc_check_connection() || !data || length <= 0) {
-        return false;
-    }
-    
-    // Use real USB CDC hardware to send data
-    int sent = usb_cdc_send_data((const uint8_t*)data, length);
-    
-    // For development/testing, output to debug log as well (limited)
-    if (sent > 0) {
-        DEBUG_MY("USB TX: ");
-        char temp_char[2] = {0, 0};
-        for (int i = 0; i < sent && i < 64; i++) { // Limit debug output
-            temp_char[0] = data[i];
-            DEBUG_MY(temp_char);
-        }
-        if (sent > 64) DEBUG_MY("...");
-        DEBUG_MY("\n");
-    }
-    
-    return (sent == length);
-}
-
-#else
-// USB CDC disabled - provide stub functions
-static bool usb_cdc_is_connected(void) { return false; }
-static int usb_cdc_read_data(char* buffer, int max_length) { return 0; }
-static bool usb_cdc_write(const char* data, int length) { return false; }
-static void usb_hardware_init(void) { DEBUG_MY("USB: CDC disabled\n"); }
-#endif
-
 void usb_protocol_init(void) {
     // Initialize state
     usb_state = USB_STATE_DISCONNECTED;
@@ -186,12 +46,7 @@ void usb_protocol_init(void) {
     tx_count = 0;
     error_count = 0;
     
-#ifdef USB_CDC_ENABLED
-    // Initialize USB hardware with dual-mode support
-    usb_hardware_init();
-#else
-    DEBUG_MY("USB Protocol: CDC disabled\n");
-#endif
+    usb_cdc_init();
     
     DEBUG_MY("USB Protocol: Initialized\n");
 }
@@ -305,7 +160,7 @@ int usb_protocol_process_commands(void) {
 
 void usb_protocol_run(void) {
     // Update connection state
-    if (usb_cdc_check_connection()) {
+    if (usb_cdc_is_connected()) {
         if (usb_state == USB_STATE_DISCONNECTED) {
             usb_state = USB_STATE_CONNECTED;
             DEBUG_MY("USB Protocol: Connected\n");
@@ -326,7 +181,7 @@ void usb_protocol_run(void) {
     if (usb_state == USB_STATE_READY) {
         int available_space = USB_RX_BUFFER_SIZE - usb_rx_pos - 1;
         if (available_space > 0) {
-            int bytes_read = usb_cdc_read_data(usb_rx_buffer + usb_rx_pos, available_space);
+            int bytes_read = usb_cdc_receive_data((uint8_t*)usb_rx_buffer + usb_rx_pos, available_space);
             if (bytes_read > 0) {
                 usb_rx_pos += bytes_read;
                 usb_rx_buffer[usb_rx_pos] = '\0'; // Ensure null termination
@@ -335,10 +190,35 @@ void usb_protocol_run(void) {
                 process_received_data();
             }
         } else {
-            // Buffer full - clear it to prevent deadlock
-            DEBUG_MY("USB Protocol: RX buffer overflow, clearing\n");
-            usb_rx_pos = 0;
-            usb_rx_buffer[0] = '\0';
+            // Buffer full - try to preserve partial commands by shifting buffer
+            DEBUG_MY("USB Protocol: RX buffer overflow, attempting recovery\n");
+            
+            // Look for the last complete line/command separator
+            int last_newline = -1;
+            for (int i = usb_rx_pos - 1; i >= 0; i--) {
+                if (usb_rx_buffer[i] == '\n' || usb_rx_buffer[i] == '\r') {
+                    last_newline = i;
+                    break;
+                }
+            }
+            
+            if (last_newline > 0) {
+                // Preserve data after the last complete command
+                int preserve_len = usb_rx_pos - last_newline - 1;
+                if (preserve_len > 0 && preserve_len < USB_RX_BUFFER_SIZE / 2) {
+                    memmove(usb_rx_buffer, &usb_rx_buffer[last_newline + 1], preserve_len);
+                    usb_rx_pos = preserve_len;
+                    usb_rx_buffer[usb_rx_pos] = '\0';
+                    DEBUG_MY("USB Protocol: Buffer recovered, preserved bytes\n");
+                } else {
+                    usb_rx_pos = 0;
+                    usb_rx_buffer[0] = '\0';
+                }
+            } else {
+                // No recoverable data, clear buffer
+                usb_rx_pos = 0;
+                usb_rx_buffer[0] = '\0';
+            }
             error_count++;
         }
         
@@ -363,7 +243,7 @@ bool usb_protocol_send_response(const char* response) {
     }
     
     int length = strlen(response);
-    if (usb_cdc_write(response, length)) {
+    if (usb_cdc_send_data((const uint8_t*)response, length)) {
         tx_count++;
         return true;
     } else {

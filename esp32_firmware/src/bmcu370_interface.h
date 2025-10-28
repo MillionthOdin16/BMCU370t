@@ -26,6 +26,7 @@ private:
     void closeCDCInterface();
     bool writeCommand(const char* command);
     int readResponse(char* buffer, size_t buffer_size, uint32_t timeout_ms);
+    bool checkConnection();  // New method to check connection status
     
 public:
     BMCU370_USB_Host();

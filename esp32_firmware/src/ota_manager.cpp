@@ -34,7 +34,7 @@ bool OTAManager::init() {
     });
     
     ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-        if (instance_ptr) instance_ptr->onProgress(progress, total);
+        if (instance_ptr) instance_ptr->onProgressCb(progress, total);
     });
     
     ArduinoOTA.onError([](ota_error_t error) {
@@ -51,6 +51,10 @@ void OTAManager::begin() {
 
 void OTAManager::handle() {
     ArduinoOTA.handle();
+}
+
+void OTAManager::onProgress(std::function<void(int)> callback) {
+    on_progress_callback = callback;
 }
 
 bool OTAManager::startOTA() {
@@ -139,11 +143,16 @@ void OTAManager::handleUploadData(AsyncWebServerRequest *request, String filenam
         
         // Get total size from request
         total_size = request->contentLength();
+        if (total_size > MAX_UPLOAD_SIZE) {
+            setError("File size exceeds maximum limit");
+            setState(OTAState::ERROR);
+            return;
+        }
         written_size = 0;
         
         // Begin update
         if (!Update.begin(total_size)) {
-            setError("Failed to begin update");
+            setError(Update.errorString());
             setState(OTAState::ERROR);
             return;
         }
@@ -154,7 +163,7 @@ void OTAManager::handleUploadData(AsyncWebServerRequest *request, String filenam
     // Write data chunk
     if (current_state == OTAState::IN_PROGRESS) {
         if (Update.write(data, len) != len) {
-            setError("Failed to write firmware data");
+            setError(Update.errorString());
             setState(OTAState::ERROR);
             Update.abort();
             return;
@@ -162,6 +171,10 @@ void OTAManager::handleUploadData(AsyncWebServerRequest *request, String filenam
         
         written_size += len;
         progress_percent = (written_size * 100) / total_size;
+
+        if (on_progress_callback) {
+            on_progress_callback(progress_percent);
+        }
         
         ESP_LOGD(TAG, "Upload progress: %d%% (%d/%d bytes)", 
                 progress_percent, written_size, total_size);
@@ -179,7 +192,7 @@ void OTAManager::handleUploadData(AsyncWebServerRequest *request, String filenam
                 delay(2000);
                 ESP.restart();
             } else {
-                setError("Failed to finalize update");
+                setError(Update.errorString());
                 setState(OTAState::ERROR);
                 Update.abort();
             }
@@ -238,7 +251,7 @@ void OTAManager::onEnd() {
     }
 }
 
-void OTAManager::onProgress(unsigned int progress, unsigned int total) {
+void OTAManager::onProgressCb(unsigned int progress, unsigned int total) {
     if (instance_ptr) {
         instance_ptr->progress_percent = (progress * 100) / total;
         
@@ -248,6 +261,10 @@ void OTAManager::onProgress(unsigned int progress, unsigned int total) {
         if (current_percent != last_reported) {
             ESP_LOGI(TAG, "OTA Progress: %d%%", instance_ptr->progress_percent);
             last_reported = current_percent;
+        }
+
+        if (instance_ptr->on_progress_callback) {
+            instance_ptr->on_progress_callback(instance_ptr->progress_percent);
         }
     }
 }
